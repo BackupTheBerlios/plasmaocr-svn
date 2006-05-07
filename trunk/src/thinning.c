@@ -182,6 +182,13 @@ static void force_8_connectivity(unsigned char **pixels, int w, int h)
 }
 
 
+int peel(unsigned char **pixels, unsigned char **buffer, int w, int h)
+{
+    mark(pixels, buffer, w, h);
+    return sweep(pixels, buffer, w, h);
+}
+
+
 /* (see thinning.h) */
 unsigned char **thin(unsigned char **pixels, int w, int h, int use_8_connectivity)
 {
@@ -191,19 +198,41 @@ unsigned char **thin(unsigned char **pixels, int w, int h, int use_8_connectivit
         return NULL;
 
     /* The main peeling cycle.
-     * One peel consists of marking and sweeping.
-     * When the bitmap stops changing, return it.
      *
-     * Note that we use buffer as the main pixel array,
+     * Note that `pixels' and `buffer' are swapped:
+     * we use buffer as the main pixel array,
      * and the original pixels array is used to mark candidates for sweeping.
      */
-    do
-    {
-        mark(buffer, pixels, w, h);
-    } while (sweep(buffer, pixels, w, h));
+    while (peel(buffer, pixels, w, h)) {}
 
     if (use_8_connectivity)
         force_8_connectivity(buffer, w, h);
 
     return buffer;
+}
+
+
+unsigned char **inverted_peel(unsigned char **pixels, int w, int h)
+{
+    unsigned char **aux = allocate_bitmap(w + 2, h + 2);
+    unsigned char **buf = allocate_bitmap(w + 4, h + 4);
+    unsigned char **pbuf = MALLOC(unsigned char *, h + 2);
+    int y, x;
+
+    clear_bitmap(buf, w + 4, h + 4);
+
+    for (y = 0; y < h + 2; y++)
+        pbuf[y] = buf[y + 1] + 1;
+
+    for (y = 0; y < h; y++) for (x = 0; x < w; x++)
+    {
+        buf[y + 2][x + 2] = pixels[y][x];
+    }
+
+    invert_bitmap(buf, w + 4, h + 4, 1); /* we get margins of 2 black pixels */
+    peel(pbuf, aux, w + 2, h + 2);
+    invert_bitmap(buf, w + 4, h + 4, 0);
+
+    free_bitmap(aux);
+    return pbuf;
 }

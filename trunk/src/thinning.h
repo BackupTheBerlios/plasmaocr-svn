@@ -74,4 +74,20 @@ unsigned char **thin(unsigned char **pixels, int width, int height,
                      int use_8_connectivity /* nonzero - true */);
 
 
+/* One pass of thinning. The outermost black pixels are cleared.
+ * `pixels': an array with margins, (0/1)
+ * `buffer': a temporary array, w * h
+ * Low-level routine.
+ *
+ * Returns 0 if the image has changed.
+ */
+int peel(unsigned char **pixels, unsigned char **buffer, int w, int h);
+
+
+/* The result has dimensions (w + 2) * (h + 2)
+ * and is to be freed with free_bitmap_with_margins(..., w + 2, h + 2).
+ */
+unsigned char **inverted_peel(unsigned char **pixels, int w, int h);
+
+
 #endif

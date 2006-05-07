@@ -159,6 +159,7 @@ void strip_endpoints_8(unsigned char **result, unsigned char **pixels, int w, in
     }
 }
 
+
 void print_bitmap(unsigned char **pixels, int w, int h)
 {
     int x, y;
@@ -170,4 +171,49 @@ void print_bitmap(unsigned char **pixels, int w, int h)
         }
         putchar('\n');
     }
+}
+
+
+void make_bitmap_0_or_1(unsigned char **pixels, int w, int h)
+{
+    int x, y;
+
+    for (y = 0; y < h; y++)
+    {
+        unsigned char *row = pixels[y];
+        
+        for (x = 0; x < w; x++)
+            row[x] = ( row[x] ? 1 : 0 );
+    }
+}
+
+
+void invert_bitmap(unsigned char **pixels, int w, int h, int first_make_it_0_or_1)
+{
+    int x, y;
+
+    for (y = 0; y < h; y++)
+    {
+        unsigned char *row = pixels[y];
+        
+        if (first_make_it_0_or_1)
+        {
+            for (x = 0; x < w; x++)
+                row[x] = ( row[x] ? 0 : 1 );
+        }
+        else
+        {
+            for (x = 0; x < w; x++)
+                row[x] = 1 - row[x];
+        }
+    }
+}
+
+
+void clear_bitmap(unsigned char **pixels, int w, int h)
+{
+    int y;
+
+    for (y = 0; y < h; y++)
+        memset(pixels[y], 0, w);
 }
