@@ -216,13 +216,14 @@ unsigned char **inverted_peel(unsigned char **pixels, int w, int h)
 {
     unsigned char **aux = allocate_bitmap(w + 2, h + 2);
     unsigned char **buf = allocate_bitmap(w + 4, h + 4);
-    unsigned char **pbuf = MALLOC(unsigned char *, h + 2);
+    unsigned char **pbuf = MALLOC(unsigned char *, h + 4);
     int y, x;
 
     clear_bitmap(buf, w + 4, h + 4);
 
-    for (y = 0; y < h + 2; y++)
-        pbuf[y] = buf[y + 1] + 1;
+    for (y = 0; y < h + 4; y++)
+        pbuf[y] = buf[y] + 1;
+    pbuf++;
 
     for (y = 0; y < h; y++) for (x = 0; x < w; x++)
     {
