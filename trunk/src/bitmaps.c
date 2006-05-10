@@ -210,6 +210,23 @@ void invert_bitmap(unsigned char **pixels, int w, int h, int first_make_it_0_or_
 }
 
 
+unsigned char **allocate_bitmap_with_white_margins(int w, int h)
+{
+    unsigned char **result = allocate_bitmap_with_margins(w, h);
+    int y;
+    
+    memset(result[-1] - 1, 0, w + 2);
+    memset(result[ h] - 1, 0, w + 2);
+    for (y = 0; y < h; y++)
+    {
+        result[y][-1] = 0;
+        result[y][w] = 0;
+    }
+
+    return result;
+}
+
+
 void clear_bitmap(unsigned char **pixels, int w, int h)
 {
     int y;

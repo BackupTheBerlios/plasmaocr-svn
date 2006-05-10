@@ -43,6 +43,9 @@ unsigned char **copy_bitmap(unsigned char **, int w, int h);
 unsigned char **allocate_bitmap_with_margins(int w, int h);
 void free_bitmap_with_margins(unsigned char **);
 
+/* Allocate bitmap with margins and clear those margins. */
+unsigned char **allocate_bitmap_with_white_margins(int w, int h);
+
 
 void print_bitmap(unsigned char **, int w, int h);
 
