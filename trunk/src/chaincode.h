@@ -31,7 +31,7 @@ typedef struct
     Rope *ropes;
     int node_count;
     int rope_count;
-    int node_allocated;
+    int node_allocated;  // well, in fact we can hide those
     int rope_allocated;
 } Chaincode;
 
@@ -61,6 +61,13 @@ void chaincode_print(Chaincode *);
 
 Chaincode *chaincode_create(void);
 void chaincode_destroy(Chaincode *);
+
+
+/* Scale the chaincode (creating a copy).
+ * This is a cheap alternative to vectorization.
+ * It's always better to scale down (coef < 1).
+ */
+Chaincode *chaincode_scale(Chaincode *cc, double coef);
 
 
 #endif

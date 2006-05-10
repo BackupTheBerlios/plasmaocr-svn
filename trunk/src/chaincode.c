@@ -2,6 +2,7 @@
 #include "bitmaps.h"
 #include "memory.h"
 #include <assert.h>
+#include <string.h>
 #include <stdio.h>
 
 
@@ -359,4 +360,88 @@ void chaincode_print(Chaincode *cc)
             putchar(cc->ropes[i].steps[k]);
         putchar('\n');
     }
+}
+
+
+/* Scale a rope by interpreting its scaled steps on a usual grid.
+ * Sets new_rope->steps and new_rope->length.
+ * `new_rope' may not coincide with `rope', otherwise old `steps' will be lost.
+ */
+static void scale_rope(Chaincode *cc, Rope *rope, Rope *new_rope, double coef)
+{
+    double x = cc->nodes[rope->start].x * coef;
+    double y = cc->nodes[rope->start].y * coef;
+    int n = rope->length;
+    char *old_steps = rope->steps;
+    int i;
+    
+    int current_cell_x = (int) x;
+    int current_cell_y = (int) y;
+
+    int count = 0;
+    int allocated = n;
+    char *steps = MALLOC(char, n);
+        
+    
+    for (i = 0; i < n; i++)
+    {
+        int new_cell_x = current_cell_x;
+        int new_cell_y = current_cell_y;
+        int dx = 0, dy = 0;
+        char step = old_steps[i];
+        
+        switch(step)
+        {
+            case '4': x -= coef; dx = -1; new_cell_x = (int) x; break;
+            case '6': x += coef; dx =  1; new_cell_x = (int) x; break;
+            case '8': y -= coef; dy = -1; new_cell_y = (int) y; break;
+            case '2': y += coef; dy =  1; new_cell_y = (int) y; break;
+        }
+
+        // Scale one step
+        while (new_cell_x != current_cell_x  ||  new_cell_y != current_cell_y)
+        {
+            current_cell_x += dx;
+            current_cell_y += dy;
+            *append_step(&steps, &count, &allocated) = step;
+        }
+    }
+
+    steps = REALLOC(char, steps, count);
+    
+    new_rope->steps = steps;
+    new_rope->length = count;
+}
+
+
+Chaincode *chaincode_scale(Chaincode *cc, double coef)
+{
+    int i;
+    Chaincode *result = MALLOC1(Chaincode);
+    result->node_count = result->node_allocated = cc->node_count;
+    result->rope_count = result->rope_allocated = cc->rope_count;
+    result->nodes = MALLOC(Node, result->node_allocated);
+    result->ropes = MALLOC(Rope, result->rope_allocated);
+    
+    /* Copy nodes */
+    for (i = 0; i < result->node_count; i++)
+    {
+        int *rope_indices = MALLOC(int, cc->nodes[i].degree);
+        memcpy(rope_indices, cc->nodes[i].rope_indices,
+               cc->nodes[i].degree * sizeof(int));
+        result->nodes[i].x = (int) (cc->nodes[i].x * coef);
+        result->nodes[i].y = (int) (cc->nodes[i].y * coef);
+        result->nodes[i].degree = cc->nodes[i].degree;
+        result->nodes[i].rope_indices = rope_indices;
+    }
+
+    /* Scale ropes */
+    for (i = 0; i < result->node_count; i++)
+    {
+        result->ropes[i].start = cc->ropes[i].start;
+        result->ropes[i].end = cc->ropes[i].end;
+        scale_rope(cc, &cc->ropes[i], &result->ropes[i], coef);
+    }
+
+    return result;
 }
