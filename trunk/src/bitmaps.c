@@ -136,7 +136,7 @@ void strip_endpoints_4(unsigned char **result, unsigned char **pixels, int w, in
     {
         int degree = pixels[y - 1][x] + pixels[y + 1][x]
                    + pixels[y][x - 1] + pixels[y][x + 1];
-        
+
         if(degree != 1)
             result[y][x] = 1;
     }
@@ -153,7 +153,7 @@ void strip_endpoints_8(unsigned char **result, unsigned char **pixels, int w, in
         int degree = pixels[y - 1][x - 1] + pixels[y - 1][x] + pixels[y - 1][x + 1]
                    + pixels[y    ][x - 1] +                    pixels[y    ][x + 1]
                    + pixels[y + 1][x - 1] + pixels[y + 1][x] + pixels[y + 1][x + 1];
-        
+
         if(degree != 1)
             result[y][x] = 1;
     }
@@ -181,7 +181,7 @@ void make_bitmap_0_or_1(unsigned char **pixels, int w, int h)
     for (y = 0; y < h; y++)
     {
         unsigned char *row = pixels[y];
-        
+
         for (x = 0; x < w; x++)
             row[x] = ( row[x] ? 1 : 0 );
     }
@@ -195,7 +195,7 @@ void invert_bitmap(unsigned char **pixels, int w, int h, int first_make_it_0_or_
     for (y = 0; y < h; y++)
     {
         unsigned char *row = pixels[y];
-        
+
         if (first_make_it_0_or_1)
         {
             for (x = 0; x < w; x++)
@@ -214,7 +214,7 @@ unsigned char **allocate_bitmap_with_white_margins(int w, int h)
 {
     unsigned char **result = allocate_bitmap_with_margins(w, h);
     int y;
-    
+
     memset(result[-1] - 1, 0, w + 2);
     memset(result[ h] - 1, 0, w + 2);
     for (y = 0; y < h; y++)

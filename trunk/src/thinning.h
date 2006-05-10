@@ -64,7 +64,7 @@
  *
  * Input:  0 - white, nonzero - black
  * Output: 0 - white, 1 - black
- * 
+ *
  * WARNING: the original bitmap is filled with garbage.
  *
  * Takes time O(width * height * thickness), whatever thickness means.

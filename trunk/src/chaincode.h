@@ -36,6 +36,9 @@ typedef struct
 } Chaincode;
 
 
+/* Append a new node/rope to the end.
+ * Doesn't initialize them.
+ */
 Rope *chaincode_append_rope(Chaincode *);
 Node *chaincode_append_node(Chaincode *);
 
@@ -53,6 +56,7 @@ Node *chaincode_append_node(Chaincode *);
 Chaincode *chaincode_by_framework(unsigned char **framework, int w, int h);
 
 
+Chaincode *chaincode_create(void);
 void chaincode_destroy(Chaincode *);
 
 

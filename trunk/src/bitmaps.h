@@ -68,7 +68,7 @@ void clear_bitmap(unsigned char **pixels, int w, int h);
  * (Well, I have in mind some usage for this one).
  *
  * `pixels' must have margins.
- * 
+ *
  * `result' cannot coincide with `pixels'.
  */
 void strip_endpoints_4(unsigned char **result, unsigned char **pixels, int w, int h);

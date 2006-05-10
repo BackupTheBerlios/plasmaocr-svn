@@ -1,20 +1,32 @@
 #include "chaincode.h"
-#include "chaincode.h"
+#include "memory.h"
 #include <assert.h>
 
 
 #define HOT_POINT  2
 
 
+Chaincode *chaincode_create()
+{
+    Chaincode *cc = MALLOC1(Chaincode);
+    cc->node_count = 0;
+    cc->rope_count = 0;
+    cc->node_allocated = 10;
+    cc->rope_allocated = 10;
+    cc->nodes = MALLOC(Node, cc->node_allocated);
+    cc->ropes = MALLOC(Rope, cc->rope_allocated);
+    return cc;
+}
+
+
 Rope *chaincode_append_rope(Chaincode *cc)
     LIST_APPEND(Rope, cc->ropes, cc->rope_count, cc->rope_allocated)
-    
+
 Node *chaincode_append_node(Chaincode *cc)
     LIST_APPEND(Node, cc->nodes, cc->node_count, cc->node_allocated)
 
 
-/* Mark the pixel (x, y) to know that we have passed it along (dx, dy).
- * The marking system is tricky. The byte is used to the full :)
+/* The marking system is tricky. The byte is used to the full :)
  *  _________________________________________________________________________
  * |        |        |         |        |        |         |        |        |
  * | dx = 1 | dx = 0 | dx = -1 | dy = 1 | dy = 0 | dy = -1 |  hot?  | black? |
@@ -27,9 +39,14 @@ Node *chaincode_append_node(Chaincode *cc)
  *
  * The 6th and 4th bits are useless.
  */
+#define PASSED_MARK(dx, dy) ((1 << ((dx) + 6)) | (1 << ((dy) + 3)))
+
+    
+/* Mark the pixel (x, y) to know that we have passed it along (dx, dy). */
+    
 static void mark_edge(unsigned char **pixels, int x, int y, int dx, int dy)
 {
-    pixels[y][x] |= (1 << (dx + 6)) | (1 << (dy + 3));
+    pixels[y][x] |= PASSED_MARK(dx, dy);
 }
 
 
@@ -37,7 +54,7 @@ static void mark_edge(unsigned char **pixels, int x, int y, int dx, int dy)
  */
 static int passed_edge(unsigned char **pixels, int x, int y, int dx, int dy)
 {
-    return pixels[y][x] & (1 << (dx + 6)) | (1 << (dy + 3));
+    return pixels[y][x] & PASSED_MARK(dx, dy);
 }
 
 
@@ -51,7 +68,7 @@ char chaincode_char(int dx, int dy)
 }
 
 
-static void append_step(char **rope, int *count, int *allocated)
+static char *append_step(char **rope, int *count, int *allocated)
     LIST_APPEND(char, *rope, *count, *allocated)
 
 
@@ -75,7 +92,7 @@ static int find_node(Chaincode *cc, int x, int y)
     
 static void walk(Chaincode *cc, int start_node, unsigned char **pixels, int dx, int dy)
 {
-    int x;
+    int x, y;
     int nx, ny;
     int allocated = 20;
     int count = 0;
@@ -147,7 +164,7 @@ static void search_hot_points(Chaincode *cc, unsigned char **pixels, int w, int 
             int degree = row[x - 1] + row[x + 1] + pixels[y - 1][x] + pixels[y + 1][x];
             if (degree != 2)
             {
-                Node *n = chaincode_add_node(cc);
+                Node *n = chaincode_append_node(cc);
                 n->x = x;
                 n->y = y;
                 n->degree = degree;
@@ -165,7 +182,7 @@ static void search_hot_points(Chaincode *cc, unsigned char **pixels, int w, int 
 static void mark_hot_points(Chaincode *cc, unsigned char **pixels, int w, int h)
 {
     int i;
-    for (i = 0; i < cc->nodes_count; i++)
+    for (i = 0; i < cc->node_count; i++)
         pixels[cc->nodes[i].y][cc->nodes[i].x] = HOT_POINT;
 }
 
@@ -189,16 +206,16 @@ static void take_cycle(Chaincode *cc, unsigned char **pixels, int x, int y)
 
     pixels[y][x] = HOT_POINT;
     
-    n = chaincode_add_node(cc);
+    n = chaincode_append_node(cc);
     n->x = x;
     n->y = y;
     n->degree = 2;
     n->rope_indices = MALLOC(int, 2);
     
-    walk(cc, cc->node_count - 1,  0, -1);
-    walk(cc, cc->node_count - 1,  0,  1);
-    walk(cc, cc->node_count - 1, -1,  0);
-    walk(cc, cc->node_count - 1,  1,  0);
+    walk(cc, cc->node_count - 1,  pixels, 0,  1);
+
+    /* We should return to the starting point from the left. */
+    assert(passed(pixels, x, y, 1, 0));
 }
 
 /* By this point, there should be only cycles and hot points remaining.
@@ -236,10 +253,10 @@ Chaincode *chaincode_by_framework(unsigned char **framework, int w, int h)
     mark_hot_points(cc, framework, w, h);
     for (i = 0; i < cc->node_count; i++)
     {
-        walk(cc, i,  0, -1);
-        walk(cc, i,  0 , 1);
-        walk(cc, i, -1,  0);
-        walk(cc, i,  1,  0);
+        walk(cc, i, framework,  0, -1);
+        walk(cc, i, framework,  0,  1);
+        walk(cc, i, framework, -1,  0);
+        walk(cc, i, framework,  1,  0);
     }
     take_all_cycles(cc, framework, w, h);
     return cc;
@@ -255,12 +272,12 @@ void chaincode_destroy(Chaincode *cc)
     int i;
     
     for (i = 0; i < rope_count; i++)
-        free(ropes[i]->steps);
+        free(ropes[i].steps);
 
     for (i = 0; i < node_count; i++)
     {
-        if (nodes[i].degree)
-            free(nodes[i]->rope_indices);
+        if (nodes[i].rope_indices)
+            free(nodes[i].rope_indices);
     }
 
     free(ropes);
