@@ -6,7 +6,7 @@ typedef struct
 {
     int x, y;
     int degree; // may be 2 (on cycles, a node is injected somewhere)
-    int *rope_indices;
+    int *rope_indices; // the same rope may be here twice
 } Node;
 
 
@@ -53,7 +53,10 @@ Node *chaincode_append_node(Chaincode *);
  *      IS OVERWRITTEN WITH NODE MAP (only nodes will be nonzero)
  *      do not use framework_force_8_connectivity() on it!
  */
-Chaincode *chaincode_by_framework(unsigned char **framework, int w, int h);
+Chaincode *chaincode_compute(unsigned char **framework, int w, int h);
+
+
+void chaincode_print(Chaincode *);
 
 
 Chaincode *chaincode_create(void);

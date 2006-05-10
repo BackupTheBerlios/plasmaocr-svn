@@ -41,7 +41,7 @@
         (ALLOCATED) <<= 1;  /* double the list */ \
         (LIST) = REALLOC(TYPE, LIST, ALLOCATED);  \
     }                                             \
-    return &LIST[(COUNT)++];                      \
+    return &(LIST)[(COUNT)++];                    \
 }
 
 
