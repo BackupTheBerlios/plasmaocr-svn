@@ -23,6 +23,7 @@
 #include <bzlib.h>  // -lbz2
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include "inftycdb.h"
 
 
@@ -35,7 +36,37 @@ static int buffer_length;
 static int records_count;
 // like a poem in code :)
 // too bad the rest of it
-// would be harder to fit 
+// would be harder to fit
+
+
+static struct
+{
+    InftyQuality quality;
+    char *string;
+} quality_strings[] = {
+    {QUALITY_NORMAL,                "normal"},
+    {QUALITY_TOUCHED,               "touched"},
+    {QUALITY_SEPARATED,             "separate"},
+    {QUALITY_TOUCHED_AND_SEPARATED, "touch_and_sep"},
+    {QUALITY_UNKNOWN,               ""},
+    {QUALITY_DOUBLEPRINT,           "doubleprint"}
+};
+
+
+static struct
+{
+    InftyLink link;
+    char *string;
+} link_strings[] = {
+    {LINK_TOP, "TOP"},
+    {LINK_HORIZONTAL, "HORIZONTAL"},
+    {LINK_UPPER, "UPPER"},
+    {LINK_LOWER, "UNDER"},
+    {LINK_LEFT_SUBSCRIPT, "LSUB"},
+    {LINK_LEFT_SUPERSCRIPT, "LSUP"},
+    {LINK_RIGHT_SUBSCRIPT, "RSUB"},
+    {LINK_RIGHT_SUPERSCRIPT, "RSUP"}
+};
 
 
 void infty_open(const char *path)
@@ -85,7 +116,7 @@ static void parse_string(char *s, char *dest, int length)
         fprintf(stderr, "parse_string> string %s was expected to start with \"\n", s);
         exit(1);
     }
-    
+
     while (1)
     {
         s++;
@@ -94,7 +125,7 @@ static void parse_string(char *s, char *dest, int length)
             fprintf(stderr, "parse_string> string was not closed\n");
             exit(1);
         }
-        
+
         if (*s == '"')
         {
             s++;
@@ -113,12 +144,12 @@ static void parse_string(char *s, char *dest, int length)
         }
         else
             dest[written++] = *s; // normal char
-        
+
         // raising alarm one char earlier, we have yet to put a \0 there
         if (written == length)
         {
             fprintf(stderr, "parse_string> string too long (buffer is only %d), tail is %s\n", length, s);
-            exit(1);            
+            exit(1);
         }
     }
 }
@@ -132,7 +163,7 @@ static char *skip_to_next_unmatched_quote(char *s)
         s++;
         if (!*s)
             return s;
-        
+
         if (*s == '"')
         {
             s++;
@@ -169,13 +200,13 @@ static int split_csv(char *line, char **fields, int fields_max)
         if (fields_written == fields_max)
         {
             fprintf(stderr, "split_csv> unexpectedly many fields in %s\n", line);
-            exit(1);                        
+            exit(1);
         }
 
         fields[fields_written++] = line;
         if (!*end_line)
             return fields_written;
-        
+
         *end_line = '\0';
         line = end_line + 1;
     }
@@ -188,16 +219,19 @@ static void parse_line()
     char region[7];
     char quality[14];
     char link[12];
+    const int total_qualities = sizeof(quality_strings) / sizeof(*quality_strings);
+    const int total_links     = sizeof(   link_strings) / sizeof(*   link_strings);
+    int i;
 
     int expected_fields_count = sizeof(fields) / sizeof(char *);
     int fields_read = split_csv(buffer, fields, expected_fields_count);
-    
+
     if (fields_read != expected_fields_count)
     {
         fprintf(stderr, "unexpected number of fields on record %d: %d\n", records_count, fields_read);
         exit(1);
     }
-    
+
     infty_record.char_ID       = parse_int(fields[0]);
     infty_record.article_ID    = parse_int(fields[1]);
     infty_record.page          = parse_int(fields[2]);
@@ -217,7 +251,7 @@ static void parse_line()
     infty_record.word_right    = parse_int(fields[26]);
     infty_record.word_bottom   = parse_int(fields[27]);
     infty_record.is_hyphenated = parse_int(fields[28]);
-    
+
     #define PARSE_STRING(N, NAME) parse_string(fields[N], infty_record.NAME, sizeof(infty_record.NAME))
     PARSE_STRING(3, type);
     PARSE_STRING(4, code);
@@ -238,57 +272,34 @@ static void parse_line()
         exit(1);
     }
 
-    infty_record.quality_unknown = 0;
-    infty_record.is_doubleprint = 0;
     parse_string(fields[10], quality, sizeof(quality));
-    if (!strcmp(quality, "normal"))
-        infty_record.is_touched = infty_record.is_separated = 0;
-    else if (!strcmp(quality, "touched"))
+    for (i = 0; i < total_qualities; i++)
     {
-        infty_record.is_touched = 1;
-        infty_record.is_separated = 0;
+        if (!strcmp(quality, quality_strings[i].string))
+        {
+            infty_record.quality = quality_strings[i].quality;
+            break;
+        }
     }
-    else if (!strcmp(quality, "separate"))
-    {
-        infty_record.is_touched = 0;
-        infty_record.is_separated = 1;
-    }
-    else if (!strcmp(quality, "touch_and_sep"))
-        infty_record.is_touched = infty_record.is_separated = 1;
-    else if (!strcmp(quality, ""))
-    {
-        infty_record.is_touched = infty_record.is_separated = 0;
-        infty_record.quality_unknown = 1;
-    }
-    else if (!strcmp(quality, "doubleprint"))
-    {
-        infty_record.is_touched = infty_record.is_separated = 0;
-        infty_record.is_doubleprint = 1;
-    }
-    else
+
+    if (i == total_qualities)
     {
         fprintf(stderr, "in record %d, quality field is unknown: %s\n", records_count, quality);
         exit(1);
     }
 
     parse_string(fields[14], link, sizeof(link));
-    if (!strcmp(link, "TOP"))
-        infty_record.link = LINK_TOP;
-    else if (!strcmp(link, "HORIZONTAL"))
-        infty_record.link = LINK_HORIZONTAL;
-    else if (!strcmp(link, "UPPER"))
-        infty_record.link = LINK_UPPER;
-    else if (!strcmp(link, "UNDER"))
-        infty_record.link = LINK_LOWER;
-    else if (!strcmp(link, "LSUB"))
-        infty_record.link = LINK_LEFT_SUBSCRIPT;
-    else if (!strcmp(link, "LSUP"))
-        infty_record.link = LINK_LEFT_SUPERSCRIPT;
-    else if (!strcmp(link, "RSUB"))
-        infty_record.link = LINK_RIGHT_SUBSCRIPT;
-    else if (!strcmp(link, "RSUP"))
-        infty_record.link = LINK_RIGHT_SUPERSCRIPT;
-    else
+
+    for (i = 0; i < total_links; i++)
+    {
+        if (!strcmp(link, link_strings[i].string))
+        {
+            infty_record.link = link_strings[i].link;
+            break;
+        }
+    }
+
+    if (i == total_links)
     {
         fprintf(stderr, "parse_line> unknown link type: %s\n", link);
         exit(1);
@@ -298,16 +309,16 @@ static void parse_line()
      || infty_record.bottom - infty_record.top + 1  !=  infty_record.height)
     {
         fprintf(stderr, "parse_line> inconsistent bounding box\n");
-        exit(1);   
+        exit(1);
     }
 
     /* This test doesn't hold.
-     * The first line on which this occurs is 1749.
+     * The first line on which char_ID and line number don't equal is 1749.
 
     if (infty_record.char_ID != records_count)
     {
         fprintf(stderr, "parse_line> char ID %d at line %d\n", infty_record.char_ID, records_count);
-        exit(1);   
+        exit(1);
     }
     */
 }
@@ -316,7 +327,7 @@ static void parse_line()
 static int find_line_break()
 {
     int i;
-    
+
     for (i = 0; buffer[i] && i < buffer_length; i++)
         if (buffer[i] == '\n' || (buffer[i] == '\r' && i + 1 < buffer_length))
             return i;
@@ -328,7 +339,7 @@ static int find_line_break()
 int infty_read()
 {
     int line_break = find_line_break();
-    
+
     if (line_break == -1)
     {
         int bytes_read = BZ2_bzread(bz, buffer + buffer_length,
@@ -350,9 +361,9 @@ int infty_read()
             exit(1);
         }
     }
-    
+
     buffer[line_break] = '\0';
-    parse_line();    
+    parse_line();
     records_count++;
 
     if (line_break + 1 < buffer_length  &&  buffer[line_break + 1] == '\n')
@@ -370,4 +381,93 @@ void infty_close()
         BZ2_bzclose(bz);
         bz = NULL;
     }
+}
+
+
+static void dump_string(FILE *f, const char *s)
+{
+    fputc('"', f);
+    while (*s)
+    {
+        if (*s == '"')
+            fputc('"', f);
+        fputc(*s, f);
+        s++;
+    }
+    fputc('"', f);
+}
+
+
+void infty_regenerate(const char *src_path, const char *dest_path)
+{
+    FILE *f = fopen(dest_path, "w");
+    infty_open(src_path);
+    while (infty_read())
+    {
+        int i;
+        const int total_qualities = sizeof(quality_strings) / sizeof(*quality_strings);
+        const int total_links     = sizeof(   link_strings) / sizeof(*   link_strings);
+
+        fprintf(f, "%d,%d,%d,", infty_record.char_ID,
+                                infty_record.article_ID,
+                                infty_record.page);
+
+        dump_string(f, infty_record.type);   fputc(',', f);
+        dump_string(f, infty_record.code);   fputc(',', f);
+        dump_string(f, infty_record.entity); fputc(',', f);
+
+        if (infty_record.is_math)
+            dump_string(f, "math");
+        else
+            dump_string(f, "text");
+        fputc(',', f);
+
+        fprintf(f, "%d,%d,%d,", infty_record.on_main_line,
+                                infty_record.is_italic,
+                                infty_record.is_bold);
+        for (i = 0; i < total_qualities; i++)
+        {
+            if (infty_record.quality == quality_strings[i].quality)
+            {
+                dump_string(f, quality_strings[i].string);
+                break;
+            }
+        }
+        assert(i < total_qualities);
+
+        fprintf(f, ",%d,%d,%d,", infty_record.width,
+                                 infty_record.height,
+                                 infty_record.parent);
+
+        for (i = 0; i < total_links; i++)
+        {
+            if (infty_record.link == link_strings[i].link)
+            {
+                dump_string(f, link_strings[i].string);
+                break;
+            }
+        }
+        assert(i < total_links);
+
+        fputc(',', f);
+        dump_string(f, infty_record.path_to_image);
+        fprintf(f, ",%d,%d,%d,%d,%d,", infty_record.left,
+                                       infty_record.top,
+                                       infty_record.right,
+                                       infty_record.bottom,
+                                       infty_record.word_ID);
+
+        dump_string(f, infty_record.MathML);
+        fputc(',', f);
+        dump_string(f, infty_record.TeX);
+        fputc(',', f);
+        dump_string(f, infty_record.IML);
+
+        fprintf(f, ",%d,%d,%d,%d,%d\r\n", infty_record.word_left,
+                                          infty_record.word_top,
+                                          infty_record.word_right,
+                                          infty_record.word_bottom,
+                                          infty_record.is_hyphenated);
+    }
+    fclose(f);
 }

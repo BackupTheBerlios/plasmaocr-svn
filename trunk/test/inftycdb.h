@@ -37,6 +37,16 @@ typedef enum
 } InftyLink;
 
 
+typedef enum
+{
+    QUALITY_NORMAL,
+    QUALITY_TOUCHED,
+    QUALITY_SEPARATED,
+    QUALITY_TOUCHED_AND_SEPARATED,
+    QUALITY_UNKNOWN,
+    QUALITY_DOUBLEPRINT
+} InftyQuality;
+
 typedef struct
 {
     int char_ID;
@@ -49,10 +59,7 @@ typedef struct
     int on_main_line; // subscripts and supersctipts are not on_main_line
     int is_italic;
     int is_bold;
-    int is_touched;
-    int is_separated;
-    int quality_unknown;
-    int is_doubleprint;
+    InftyQuality quality;
     int width;
     int height;
     int parent;
@@ -72,8 +79,13 @@ extern InftyRecord infty_record;
 
 
 void infty_open(const char *path_to_bzipped2_csv_database);
-int infty_read(); /* zero - EOF */
-void infty_close();
+int infty_read(void); /* zero - EOF */
+void infty_close(void);
+
+/* Parses the bzipped database and dumps it to the file (not bzipped).
+ * Useful only for testing.
+ */
+void infty_regenerate(const char *src_path, const char *dest_path);
 
 
 #endif
