@@ -20,12 +20,13 @@
  */
 
 
-#ifndef PLASMA_OCR_INFTYCDB_H
-#define PLASMA_OCR_INFTYCDB_H
+#ifndef INFTYCDB_H
+#define INFTYCDB_H
 
 
 typedef enum
 {
+    LINK_TOP,
     LINK_HORIZONTAL,
     LINK_UPPER,
     LINK_LOWER,
@@ -38,31 +39,41 @@ typedef enum
 
 typedef struct
 {
-    long char_ID;
+    int char_ID;
     int article_ID;
     int page;
-    int type;
-    int code;
-    char entity[10];
+    char type[20];
+    char code[5];
+    char entity[30];
     int is_math;
-    int is_baseline; // subscripts and supersctipts are not baseline
+    int on_main_line; // subscripts and supersctipts are not on_main_line
     int is_italic;
     int is_bold;
     int is_touched;
     int is_separated;
+    int quality_unknown;
+    int is_doubleprint;
     int width;
     int height;
-    long parent;
+    int parent;
     InftyLink link;
-    char path_to_image[10];
+    char path_to_image[12];
     int left, top, right, bottom;
-    long word_ID;
-    char MathML[50];
-    char TeX[50];
-    char IML[50];
+    int word_ID;
+    char MathML[5000];
+    char TeX[5000];
+    char IML[5000];
     int word_left, word_top, word_right, word_bottom;
     int is_hyphenated;
 } InftyRecord;
+
+
+extern InftyRecord infty_record;
+
+
+void infty_open(const char *path_to_bzipped2_csv_database);
+int infty_read(); /* zero - EOF */
+void infty_close();
 
 
 #endif
