@@ -19,6 +19,9 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+/* This is all about parsing InftyCDB's csv file.
+ * To save space, I've bzipped2 the csv and recompressed all pngs to djvu.
+ */
 
 #ifndef INFTYCDB_H
 #define INFTYCDB_H
@@ -71,6 +74,7 @@ typedef struct
     char TeX[5000];
     char IML[5000];
     int word_left, word_top, word_right, word_bottom;
+    int word_width, word_height;
     int is_hyphenated;
 } InftyRecord;
 
@@ -78,8 +82,16 @@ typedef struct
 extern InftyRecord infty_record;
 
 
-void infty_open(const char *path_to_bzipped2_csv_database);
+void infty_open(const char *path_to_bzipped2_csv_database, const char *path_to_lib);
 int infty_read(void); /* zero - EOF */
+
+/* Get the image of the current character or word. 
+ * The image will become invalid after next infty_read().
+ * Do not destroy the image.
+ */
+unsigned char **infty_char_bitmap(void);
+unsigned char **infty_word_bitmap(void);
+
 void infty_close(void);
 
 /* Parses the bzipped database and dumps it to the file (not bzipped).

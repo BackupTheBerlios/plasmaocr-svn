@@ -20,11 +20,14 @@
  */
 
 
-#include <bzlib.h>  // -lbz2
+#include <bzlib.h>      // -lbz2
+#include <minidjvu.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include "inftycdb.h"
+#include "bitmaps.h"
+#include "memory.h"
 
 
 // alas, global variables
@@ -37,6 +40,14 @@ static int records_count;
 // like a poem in code :)
 // too bad the rest of it
 // would be harder to fit
+
+
+static unsigned const char *path_to_images;
+static unsigned char *current_page_name;
+static unsigned char **page;
+static int page_width, page_height;
+static unsigned char **char_pointers;
+static unsigned char **word_pointers;
 
 
 static struct
@@ -69,7 +80,7 @@ static struct
 };
 
 
-void infty_open(const char *path)
+void infty_open(const char *path, const char *path_to_lib)
 {
     infty_close();
     bz = BZ2_bzopen(path, "rb");
@@ -80,6 +91,107 @@ void infty_open(const char *path)
     }
 
     buffer_length = records_count = 0;
+    current_page_name = NULL;
+    page = char_pointers = word_pointers = NULL;
+    path_to_images = path_to_lib;
+}
+
+
+static void destroy_current_page()
+{
+    if (page)
+    {
+        FREE(current_page_name);
+        current_page_name = NULL;
+        free_bitmap(page);
+        page = NULL;
+    }
+
+    if (char_pointers)
+    {
+        FREE(char_pointers);
+        char_pointers = NULL;
+    }
+    
+    if (word_pointers)
+    {
+        FREE(word_pointers);
+        word_pointers = NULL;
+    }
+}
+
+
+/* Load a page into page, page_width, page_height.
+ */
+static void load_page(const char *name)
+{
+    char suffix[] = ".djvu";  // I've converted it all from PNG to DjVu, 77M -> 20M
+    char buffer[strlen(path_to_images) + 1 + strlen(name) + sizeof(suffix)];
+    mdjvu_error_t error;
+    mdjvu_image_t img;
+    mdjvu_bitmap_t bitmap;
+
+    sprintf(buffer, "%s/%s%s", path_to_images, name, suffix);
+    //printf("djvu read\n");
+    img = mdjvu_load_djvu_page(buffer, &error);
+    if (!img)
+    {
+        fprintf(stderr, "minidjvu error on file `%s': %s\n", buffer,
+                         mdjvu_get_error_message(error));
+        exit(1);
+    }
+    
+    bitmap = mdjvu_render(img);
+    mdjvu_image_destroy(img);
+    
+    page_width = mdjvu_bitmap_get_width(bitmap);
+    page_height = mdjvu_bitmap_get_height(bitmap);
+    
+    page = allocate_bitmap(page_width, page_height);
+    mdjvu_bitmap_unpack_all_0_or_1(bitmap, page);
+    mdjvu_bitmap_destroy(bitmap);
+}
+
+
+static void open_current_page(const char *path)
+{
+    if (current_page_name && !strcmp(path, current_page_name))
+        return;
+
+    destroy_current_page();
+    current_page_name = strdup(path);
+    load_page(path);
+}
+
+
+unsigned char **subimage(int left, int top, int h, unsigned char ***buf)
+{
+    int i;
+    
+    if (*buf)
+        *buf = REALLOC(unsigned char *, *buf, h);
+    else
+        *buf = MALLOC(unsigned char *, h);
+
+    for (i = 0; i < h; i++)
+        (*buf)[i] = page[i + top] + left;
+
+    return *buf;
+}
+
+
+unsigned char **infty_char_bitmap(void)
+{
+    open_current_page(infty_record.path_to_image);
+    return subimage(infty_record.left, infty_record.top,
+                    infty_record.height, &char_pointers);
+}
+
+unsigned char **infty_word_bitmap(void)
+{
+    open_current_page(infty_record.path_to_image);
+    return subimage(infty_record.word_left, infty_record.word_top,
+                    infty_record.word_height, &word_pointers);
 }
 
 
@@ -252,6 +364,9 @@ static void parse_line()
     infty_record.word_bottom   = parse_int(fields[27]);
     infty_record.is_hyphenated = parse_int(fields[28]);
 
+    infty_record.word_width  = infty_record.word_right  - infty_record.word_left + 1;
+    infty_record.word_height = infty_record.word_bottom - infty_record.word_top  + 1;
+
     #define PARSE_STRING(N, NAME) parse_string(fields[N], infty_record.NAME, sizeof(infty_record.NAME))
     PARSE_STRING(3, type);
     PARSE_STRING(4, code);
@@ -376,6 +491,8 @@ int infty_read()
 
 void infty_close()
 {
+    destroy_current_page();
+    
     if (bz)
     {
         BZ2_bzclose(bz);
@@ -401,7 +518,7 @@ static void dump_string(FILE *f, const char *s)
 void infty_regenerate(const char *src_path, const char *dest_path)
 {
     FILE *f = fopen(dest_path, "w");
-    infty_open(src_path);
+    infty_open(src_path, NULL);
     while (infty_read())
     {
         int i;
