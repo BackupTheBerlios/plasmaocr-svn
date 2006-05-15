@@ -125,6 +125,8 @@ static void destroy_current_page()
  */
 static void load_page(const char *name)
 {
+    assert(name);
+    assert(path_to_images);
     char suffix[] = ".djvu";  // I've converted it all from PNG to DjVu, 77M -> 20M
     char buffer[strlen(path_to_images) + 1 + strlen(name) + sizeof(suffix)];
     mdjvu_error_t error;
@@ -132,7 +134,7 @@ static void load_page(const char *name)
     mdjvu_bitmap_t bitmap;
 
     sprintf(buffer, "%s/%s%s", path_to_images, name, suffix);
-    //printf("djvu read\n");
+    // printf("djvu read\n");
     img = mdjvu_load_djvu_page(buffer, &error);
     if (!img)
     {
@@ -325,9 +327,33 @@ static int split_csv(char *line, char **fields, int fields_max)
 }
 
 
-static void parse_line()
+static int char_hex2dec(char c)
 {
-    char *fields[29];
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    else if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    else
+    {
+        assert(c >= '0' && c <= '9');
+        return c - '0';
+    }   
+}
+
+
+static unsigned short get_code(char *code)
+{
+    return (char_hex2dec(code[0]) << 12)
+         | (char_hex2dec(code[1]) << 8)
+         | (char_hex2dec(code[2]) << 4)
+         | char_hex2dec(code[3]);
+}
+
+
+static void parse_line(int input_with_path_first)
+{
+    char *fields_buf[30];
+    char **fields = fields_buf;
     char region[7];
     char quality[14];
     char link[12];
@@ -335,7 +361,7 @@ static void parse_line()
     const int total_links     = sizeof(   link_strings) / sizeof(*   link_strings);
     int i;
 
-    int expected_fields_count = sizeof(fields) / sizeof(char *);
+    int expected_fields_count = sizeof(fields_buf) / sizeof(char *) - (input_with_path_first ? 0 : 1);
     int fields_read = split_csv(buffer, fields, expected_fields_count);
 
     if (fields_read != expected_fields_count)
@@ -343,6 +369,10 @@ static void parse_line()
         fprintf(stderr, "unexpected number of fields on record %d: %d\n", records_count, fields_read);
         exit(1);
     }
+
+    if (input_with_path_first)
+        fields++;
+        
 
     infty_record.char_ID       = parse_int(fields[0]);
     infty_record.article_ID    = parse_int(fields[1]);
@@ -369,7 +399,8 @@ static void parse_line()
 
     #define PARSE_STRING(N, NAME) parse_string(fields[N], infty_record.NAME, sizeof(infty_record.NAME))
     PARSE_STRING(3, type);
-    PARSE_STRING(4, code);
+    PARSE_STRING(4, code_string);
+    infty_record.code = get_code(infty_record.code_string);
     PARSE_STRING(5, entity);
     PARSE_STRING(15, path_to_image);
     PARSE_STRING(21, MathML);
@@ -451,7 +482,7 @@ static int find_line_break()
 }
 
 
-int infty_read()
+static int raw_infty_read(int input_with_path_first)
 {
     int line_break = find_line_break();
 
@@ -478,7 +509,7 @@ int infty_read()
     }
 
     buffer[line_break] = '\0';
-    parse_line();
+    parse_line(input_with_path_first);
     records_count++;
 
     if (line_break + 1 < buffer_length  &&  buffer[line_break + 1] == '\n')
@@ -486,6 +517,12 @@ int infty_read()
     buffer_length -= line_break + 1;
     memmove(buffer, buffer + line_break + 1, buffer_length);
     return 1;
+}
+
+
+int infty_read()
+{
+    return raw_infty_read(0);
 }
 
 
@@ -515,22 +552,29 @@ static void dump_string(FILE *f, const char *s)
 }
 
 
-void infty_regenerate(const char *src_path, const char *dest_path)
+void infty_regenerate(const char *src_path, const char *dest_path,
+                      int input_with_path_first, int output_with_path_first)
 {
     FILE *f = fopen(dest_path, "w");
     infty_open(src_path, NULL);
-    while (infty_read())
+    while (raw_infty_read(input_with_path_first))
     {
         int i;
         const int total_qualities = sizeof(quality_strings) / sizeof(*quality_strings);
         const int total_links     = sizeof(   link_strings) / sizeof(*   link_strings);
+
+        if (output_with_path_first)
+        {
+            dump_string(f, infty_record.path_to_image);
+            fprintf(f, ",");
+        }
 
         fprintf(f, "%d,%d,%d,", infty_record.char_ID,
                                 infty_record.article_ID,
                                 infty_record.page);
 
         dump_string(f, infty_record.type);   fputc(',', f);
-        dump_string(f, infty_record.code);   fputc(',', f);
+        dump_string(f, infty_record.code_string);   fputc(',', f);
         dump_string(f, infty_record.entity); fputc(',', f);
 
         if (infty_record.is_math)

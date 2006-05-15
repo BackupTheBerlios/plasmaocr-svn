@@ -56,7 +56,8 @@ typedef struct
     int article_ID;
     int page;
     char type[20];
-    char code[5];
+    char code_string[5];
+    unsigned short code;
     char entity[30];
     int is_math;
     int on_main_line; // subscripts and supersctipts are not on_main_line
@@ -97,7 +98,7 @@ void infty_close(void);
 /* Parses the bzipped database and dumps it to the file (not bzipped).
  * Useful only for testing.
  */
-void infty_regenerate(const char *src_path, const char *dest_path);
-
+void infty_regenerate(const char *src_path, const char *dest_path,
+                      int input_with_path_first, int output_with_path_first);
 
 #endif
