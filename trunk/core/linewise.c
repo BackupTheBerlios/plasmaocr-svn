@@ -52,7 +52,7 @@ LinewiseReader linewise_reader_create(FILE *in)
 
 void linewise_reader_destroy(LinewiseReader r)
 {
-    if (r->in) fclose(r->in);
+    // if (r->in) fclose(r->in);
     free(r->line);
     free(r);
 }
@@ -99,7 +99,7 @@ const char *linewise_read(LinewiseReader r)
         
         if (!p) /* EOF */
         {
-            fclose(r->in);
+            // fclose(r->in);
             r->in = NULL;
             
             if (start == r->line)

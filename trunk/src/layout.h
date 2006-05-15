@@ -57,12 +57,14 @@ BoxList *box_list_create(void);
 void box_list_finalize(BoxList *l);
 void box_list_destroy(BoxList *l);
 Box *box_allocate(BoxList *boxlist);
-BoxList *parse_ocrad(List *, const char *path);
+BoxList *parse_ocrad(List *, FILE *f);
 
 /* Set `box' pointers in leaves.
  * NOTE: don't call this before the boxlist is finalized,
  * since it may be moved by realloc.
  */
 void list_resolve(List *l, Box *boxes);
+
+void list_destroy_children(List *l);
 
 #endif

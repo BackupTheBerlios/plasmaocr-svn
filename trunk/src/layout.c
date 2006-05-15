@@ -78,8 +78,7 @@ static void parse_box(BoxList *boxlist, List *l, LinewiseReader r)
     assert(s);
     sscanf(s, "%d %d %d %d", &b->x, &b->y, &b->w, &b->h);
     first_quote = strchr(s, '\'');
-    assert(first_quote);
-    b->is_space  =  first_quote[1] == ' ';
+    b->is_space  =  first_quote && first_quote[1] == ' ';
     list_init(l, LIST_LEAF, 1);
     l->index = boxlist->count - 1;
 }
@@ -120,18 +119,14 @@ static void parse_text_block(BoxList *boxlist, List *l, LinewiseReader r)
 
 
 /* Parse the "OCR Results File" produced by GNU Ocrad (with -x <filename> option). */
-BoxList *parse_ocrad(List *l, const char *path)
+BoxList *parse_ocrad(List *l, FILE *f)
 {
     LinewiseReader r;
     BoxList *boxlist;
     
     const char *s = "";
     int n;
-    int i;
-    
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return NULL;
+    int i; 
     
     r = linewise_reader_create(f);
     boxlist = box_list_create();
@@ -151,3 +146,17 @@ BoxList *parse_ocrad(List *l, const char *path)
     return boxlist;
 }
 
+
+void list_destroy_children(List *l)
+{
+    if (l->type != LIST_LEAF)
+    {
+        int n = l->count;
+        int i;
+        
+        for (i = 0; i < n; i++)
+            list_destroy_children(&l->items[i]);
+
+        FREE(l->items);
+    }
+}

@@ -142,24 +142,36 @@ TransitionTable transition_table_load(const char *path)
 static const char *find_in_table(Entry *entries, int n, int code)
 {
     int mid = n / 2;
-    int midcode = entries[mid].code;
+    int midcode;
     
     if (!n)
         return NULL;
     
+    midcode = entries[mid].code;
+
+    if (midcode == code)
+        return entries[mid].TeX;
+    
+    if (n == 1)
+        return NULL;
+    
     if (midcode < code)
         return find_in_table(entries + mid, n - mid, code);
-    
-    if (midcode > code)
+    else
         return find_in_table(entries, mid, code);
-    
-    return entries[mid].TeX;
 }
 
 
 const char *transition_table_lookup(TransitionTable table, int code)
 {
-    return find_in_table(table->entries, table->count, code);
+    const char *p = find_in_table(table->entries, table->count, code);
+    if (p) return p;
+    p = find_in_table(table->entries, table->count, code | 0x2000);
+    if (p) return p;
+    p = find_in_table(table->entries, table->count, code | 0x4000);
+    if (p) return p;
+    p = find_in_table(table->entries, table->count, code | 0x6000);
+    return p;
 }
 
 

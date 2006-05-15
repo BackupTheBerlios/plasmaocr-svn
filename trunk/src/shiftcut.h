@@ -1,6 +1,6 @@
 /* Plasma OCR - an OCR engine
  *
- * linewise.h - reading text files line by line
+ * shiftcut.h - compute shift-n-cut fingerprints
  *
  * Copyright (C) 2006  Ilya Mezhirov
  *
@@ -20,29 +20,14 @@
  */
 
 
-
-#ifndef PLASMA_OCR_LINEWISE_H
-#define PLASMA_OCR_LINEWISE_H
-
-
-#include <stdio.h>
+#ifndef PLASMA_OCR_SHIFTCUT_H
+#define PLASMA_OCR_SHIFTCUT_H
 
 
-typedef struct LinewiseReaderStruct *LinewiseReader;
+typedef unsigned char Fingerprint[31];
 
-LinewiseReader linewise_reader_create(FILE *input);
+void get_fingerprint_bw(unsigned char **, int w, int h, Fingerprint *result);
+void get_fingerprint_gray(unsigned char **, int w, int h, Fingerprint *result);
+long fingerprint_distance_squared(Fingerprint f1, Fingerprint f2);
 
-/* Destroy the LinewiseReader. FILE IS NOT CLOSED. */
-void linewise_reader_destroy(LinewiseReader);
-
-/* Read a line (including newline character), allocating memory as necessary.
- * Returns NULL and closes the file in case of EOF.
- * Important: with each call, previously allocated lines are erased.
- */
-const char *linewise_read(LinewiseReader);
-
-/* Same as linewise_read, but strips newline character. */
-const char *linewise_read_and_chomp(LinewiseReader r);
-
-
-#endif /* LINEWISE_H */
+#endif
