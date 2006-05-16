@@ -116,7 +116,6 @@ int load_pnm(FILE *f, unsigned char ***pixels, int *width, int *height)
         break;
         case '5': case '6':
             fscanf(f, "%d %d %d", width, height, &maxval);
-            fscanf(f, "%d %d %d", width, height, &maxval);
         break;
         default:
             fprintf(stderr, "only raw PNM files supported\n");
@@ -130,12 +129,12 @@ int load_pnm(FILE *f, unsigned char ***pixels, int *width, int *height)
         exit(1);
     }
 
-    switch(getc(f))
+    switch(fgetc(f))
     {
         case ' ': case '\t': case '\r': case '\n':
             break;
         default:
-            fprintf(stderr, "corrupted PNM\n");
+            fprintf(stderr, "corrupted PNM, current offset is %ld\n", ftell(f));
             exit(1);
     }
 
@@ -147,11 +146,11 @@ int load_pnm(FILE *f, unsigned char ***pixels, int *width, int *height)
             return PBM;
         case '5':
             *pixels = allocate_bitmap(*width, *height);
-            fread(*pixels, *width, *height, f);
+            fread(**pixels, *width, *height, f);
             return PGM;
         case '6':            
             *pixels = allocate_bitmap(*width * 3, *height);
-            fread(*pixels, *width * 3, *height, f);
+            fread(**pixels, *width * 3, *height, f);
             return PPM;
         default:
             assert(0);
