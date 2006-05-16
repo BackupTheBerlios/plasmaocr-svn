@@ -1,0 +1,46 @@
+#! /bin/sh
+
+
+# Find the `coldplasma' executable
+
+if [ "$PLASMA" == "" ] ; then
+    PLASMA=`which coldplasma`
+    if [ "$PLASMA" == "" ] ; then
+        echo "Cannot find the \`coldplasma' executable. Check that it's installed." >&2
+        exit 1
+    fi
+fi
+
+
+# Find GNU Ocrad
+
+if [ "$OCRAD" == "" ] ; then
+    OCRAD=`which ocrad`
+    if [ "$OCRAD" == "" ] ; then
+        echo "Cannot find GNU Ocrad (it's needed to analyze layout). Install it, please." >&2
+        exit 1
+    fi
+fi
+
+
+# Find the directory with character database
+
+if [ "$PLASMA_HOME" == "" ] ; then
+    if [ -d /usr/share/plasma ] ; then
+        PLASMA_HOME=/usr/share/plasma
+    elif [ -d /usr/local/share/plasma ] ; then
+        PLASMA_HOME=/usr/local/share/plasma
+    else
+        echo "Cannot find the character library." >&2
+    fi
+fi
+
+
+if [ "$1" == "" ] ; then
+    echo "Usage: plasma <PGM or PBM file>" >&2
+    exit 2
+fi
+
+TMPFILE=`mktemp` || { echo Could not create temp file >&2 && exit 1; }
+ocrad "$1" -x "$TMPFILE" >/dev/null && coldplasma "$1" "$PLASMA_HOME/charlib-0.1" "$PLASMA_HOME/code2tex-0.1" "$TMPFILE"
+rm -f "$TMPFILE"
