@@ -1,6 +1,6 @@
 /* Plasma OCR - an OCR engine
  *
- * memory.h - some memory-handling macros
+ * common.h - some common macros
  *
  * Copyright (C) 2006  Ilya Mezhirov
  *
@@ -20,8 +20,23 @@
  */
 
 
-#ifndef PLASMA_OCR_MEMORY_H
-#define PLASMA_OCR_MEMORY_H
+#ifndef PLASMA_OCR_COMMON_H
+#define PLASMA_OCR_COMMON_H
+
+
+#ifdef HAVE_CONFIG_H
+    #include "config.h"
+#endif
+
+
+#ifdef __cplusplus
+#   define FUNCTIONS_BEGIN extern "C" {
+#   define FUNCTIONS_END }
+#else
+#   define FUNCTIONS_BEGIN
+#   define FUNCTIONS_END
+#endif
+
 
 
 #include <stdlib.h>
@@ -34,6 +49,9 @@
 #define FREE(PTR)               free(PTR)
 
 
+/* Yeah, I know this is ugly and there are C++ templates for that.
+ * But this is for C code.
+ */
 #define LIST_APPEND(TYPE, LIST, COUNT, ALLOCATED) \
 {                                                 \
     if ((COUNT) == (ALLOCATED))                   \

@@ -1,6 +1,6 @@
 /* Plasma OCR - an OCR engine
  *
- * thinning.c - getting a "framework" of a letter by thinning it.
+ * thinning.c - morphological thinning, thickening and skeletonization
  *
  * Copyright (C) 2006  Ilya Mezhirov
  *
@@ -20,11 +20,6 @@
  */
 
 
-#ifdef HAVE_CONFIG_H
-    #include "config.h"
-#endif
-
-#include "memory.h"
 #include "bitmaps.h"
 #include "thinning.h"
 #include <stdlib.h>
@@ -189,10 +184,27 @@ int peel(unsigned char **pixels, unsigned char **buffer, int w, int h)
 }
 
 
-/* (see thinning.h) */
-unsigned char **thin(unsigned char **pixels, int w, int h, int use_8_connectivity)
+unsigned char **thin(unsigned char **pixels, int w, int h, int N)
 {
-    unsigned char **buffer = provide_margins(pixels, w, h, /* make_it_0_or_1: */ 1);
+    unsigned char **result = provide_margins(pixels, w, h, /* make_it_0_or_1: */ 1);
+    unsigned char **buffer = allocate_bitmap(w, h);
+
+    while (N--)
+    {
+        if (!peel(result, buffer, w, h))
+            break;
+    }
+    
+    free_bitmap(buffer);
+    return result;
+}
+
+
+/* (see thinning.h) */
+unsigned char **skeletonize_internal(unsigned char **pixels, int w, int h,
+                                     int use_8_connectivity, int make_it_0_or_1)
+{
+    unsigned char **buffer = provide_margins(pixels, w, h, make_it_0_or_1);
 
     if (!buffer)
         return NULL;
@@ -212,27 +224,42 @@ unsigned char **thin(unsigned char **pixels, int w, int h, int use_8_connectivit
 }
 
 
-unsigned char **inverted_peel(unsigned char **pixels, int w, int h)
+unsigned char **skeletonize(unsigned char **pixels, int w, int h, int use_8_connectivity)
 {
-    unsigned char **aux = allocate_bitmap(w + 2, h + 2);
-    unsigned char **buf = allocate_bitmap(w + 4, h + 4);
-    unsigned char **pbuf = MALLOC(unsigned char *, h + 4);
+    unsigned char **buffer = copy_bitmap(pixels, w, h);
+    unsigned char **result = skeletonize_internal(buffer, w, h, use_8_connectivity, 1);
+    free_bitmap(buffer);
+    return result;
+}
+
+
+unsigned char **thicken(unsigned char **pixels, int w, int h, int N)
+{
+    int r_w = w + (N + 1) * 2;
+    int r_h = h + (N + 1) * 2;
+    unsigned char **aux = allocate_bitmap(w + N * 2, h + N * 2);
+    unsigned char **buf = allocate_bitmap(r_w, r_w);
+    unsigned char **pbuf = MALLOC(unsigned char *, r_h);
+
     int y, x;
+    clear_bitmap(buf, r_w, r_h);
 
-    clear_bitmap(buf, w + 4, h + 4);
-
-    for (y = 0; y < h + 4; y++)
+    for (y = 0; y < r_h; y++)
         pbuf[y] = buf[y] + 1;
     pbuf++;
 
     for (y = 0; y < h; y++) for (x = 0; x < w; x++)
     {
-        buf[y + 2][x + 2] = pixels[y][x];
+        buf[y + N + 1][x + N + 1] = pixels[y][x];
     }
 
-    invert_bitmap(buf, w + 4, h + 4, 1); /* we get margins of 2 black pixels */
-    peel(pbuf, aux, w + 2, h + 2);
-    invert_bitmap(buf, w + 4, h + 4, 0);
+    invert_bitmap(buf, r_w, r_h, 1); /* we get margins of 2 black pixels */
+    while (N--)
+    {
+        if (!peel(pbuf, aux, w + N * 2, h + N * 2))
+            break;
+    }
+    invert_bitmap(buf, r_w, r_h, 0);
 
     free_bitmap(aux);
     return pbuf;

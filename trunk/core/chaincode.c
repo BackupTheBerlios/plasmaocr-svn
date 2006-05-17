@@ -1,6 +1,6 @@
 #include "chaincode.h"
 #include "bitmaps.h"
-#include "memory.h"
+#include "thinning.h"
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
@@ -287,7 +287,7 @@ static void take_all_cycles(Chaincode *cc, unsigned char **pixels, int w, int h)
 }
 
 
-Chaincode *chaincode_compute(unsigned char **framework, int w, int h)
+Chaincode *chaincode_compute_internal(unsigned char **framework, int w, int h)
 {
     int i;
     Chaincode *cc = chaincode_create();
@@ -443,5 +443,14 @@ Chaincode *chaincode_scale(Chaincode *cc, double coef)
         scale_rope(cc, &cc->ropes[i], &result->ropes[i], coef);
     }
 
+    return result;
+}
+
+
+Chaincode *chaincode_compute(unsigned char **pixels, int w, int h)
+{
+    unsigned char **framework = skeletonize(pixels, w, h, /* 8-conn.: */ 0);
+    Chaincode *result = chaincode_compute_internal(framework, w, h);
+    free_bitmap_with_margins(framework);
     return result;
 }

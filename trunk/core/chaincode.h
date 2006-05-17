@@ -2,6 +2,8 @@
 #define PLASMA_OCR_CHAINCODE_H
 
 
+#include "common.h"
+
 typedef struct
 {
     int x, y;
@@ -36,6 +38,8 @@ typedef struct
 } Chaincode;
 
 
+FUNCTIONS_BEGIN
+
 /* Append a new node/rope to the end.
  * Doesn't initialize them.
  */
@@ -49,11 +53,17 @@ Node *chaincode_append_node(Chaincode *);
  * `framework':
  *      should contain only 0/1
  *      should have white 1-pixel margins
+ *      should be extracted with 4-connectivity
  *      (arrays returned by framework_compute() are fine)
  *      IS OVERWRITTEN WITH NODE MAP (only nodes will be nonzero)
- *      do not use framework_force_8_connectivity() on it!
  */
-Chaincode *chaincode_compute(unsigned char **framework, int w, int h);
+Chaincode *chaincode_compute_internal(unsigned char **framework, int w, int h);
+
+
+/* Compute the chaincode.
+ * This is equivalent to skeletonize() + chaincode_compute_internal().
+ */
+Chaincode *chaincode_compute(unsigned char **pixels, int w, int h);
 
 
 void chaincode_print(Chaincode *);
@@ -69,5 +79,6 @@ void chaincode_destroy(Chaincode *);
  */
 Chaincode *chaincode_scale(Chaincode *cc, double coef);
 
+FUNCTIONS_END
 
 #endif

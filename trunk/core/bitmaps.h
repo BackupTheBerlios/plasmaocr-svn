@@ -29,6 +29,10 @@
 #define PLASMA_OCR_BITMAP_H
 
 
+#include "common.h"
+
+FUNCTIONS_BEGIN
+
 /* Just allocate a w * h array. */
 unsigned char **allocate_bitmap(int w, int h);
 void free_bitmap(unsigned char **);
@@ -74,5 +78,6 @@ void clear_bitmap(unsigned char **pixels, int w, int h);
 void strip_endpoints_4(unsigned char **result, unsigned char **pixels, int w, int h);
 void strip_endpoints_8(unsigned char **result, unsigned char **pixels, int w, int h);
 
+FUNCTIONS_END
 
 #endif
