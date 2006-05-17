@@ -238,7 +238,7 @@ unsigned char **thicken(unsigned char **pixels, int w, int h, int N)
     int r_w = w + (N + 1) * 2;
     int r_h = h + (N + 1) * 2;
     unsigned char **aux = allocate_bitmap(w + N * 2, h + N * 2);
-    unsigned char **buf = allocate_bitmap(r_w, r_w);
+    unsigned char **buf = allocate_bitmap(r_w, r_h);
     unsigned char **pbuf = MALLOC(unsigned char *, r_h);
 
     int y, x;
