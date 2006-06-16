@@ -262,5 +262,6 @@ unsigned char **thicken(unsigned char **pixels, int w, int h, int N)
     invert_bitmap(buf, r_w, r_h, 0);
 
     free_bitmap(aux);
+    FREE(buf);
     return pbuf;
 }
