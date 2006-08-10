@@ -51,6 +51,7 @@ void free_bitmap_with_margins(unsigned char **);
 unsigned char **allocate_bitmap_with_white_margins(int w, int h);
 
 
+
 void print_bitmap(unsigned char **, int w, int h);
 
 
@@ -67,6 +68,7 @@ void invert_bitmap(unsigned char **, int w, int h, int first_make_it_0_or_1);
 
 void clear_bitmap(unsigned char **pixels, int w, int h);
 
+int bitmaps_equal(unsigned char **p1, unsigned char **p2, int w, int h);
 
 /* Clear pixels that have exactly 1 of 4 (or 8) neighbors.
  * (Well, I have in mind some usage for this one).
@@ -78,6 +80,13 @@ void clear_bitmap(unsigned char **pixels, int w, int h);
 void strip_endpoints_4(unsigned char **result, unsigned char **pixels, int w, int h);
 void strip_endpoints_8(unsigned char **result, unsigned char **pixels, int w, int h);
 
+int find_mass(unsigned char **pixels, int w, int h);
+void find_mass_center(unsigned char **pixels, int w, int h, int *m, int *cx, int *cy, int quant);
+
 FUNCTIONS_END
+
+#ifdef TESTING
+extern TestSuite bitmaps_suite;
+#endif
 
 #endif

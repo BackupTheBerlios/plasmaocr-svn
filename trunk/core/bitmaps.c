@@ -155,6 +155,21 @@ void strip_endpoints_8(unsigned char **result, unsigned char **pixels, int w, in
 }
 
 
+int bitmaps_equal(unsigned char **p1, unsigned char **p2, int w, int h)
+{
+    int x, y;
+    for (y = 0; y < h; y++)
+    {
+        for (x = 0; x < w; x++)
+        {
+            if (p1[y][x] != p2[y][x])
+                return 0;
+        }
+    }
+    return 1;
+}
+
+
 void print_bitmap(unsigned char **pixels, int w, int h)
 {
     int x, y;
@@ -229,3 +244,108 @@ void clear_bitmap(unsigned char **pixels, int w, int h)
     for (y = 0; y < h; y++)
         memset(pixels[y], 0, w);
 }
+
+
+int find_mass(unsigned char **pixels, int w, int h)
+{
+    int sum = 0;
+    int i, j;
+    for (i = 0; i < h; i++)
+    {
+        unsigned char *row = pixels[i];
+        for (j = 0; j < w; j++)
+        {
+            if (row[j])
+                sum++;
+        }
+    }
+    return sum;
+}
+
+
+void find_mass_center(unsigned char **pixels, int w, int h, int *m, int *cx, int *cy, int quant)
+{
+    int x, y;
+    int sx = 0, sy = 0;
+    int mass;
+
+    if (m && *m)
+        mass = *m;
+    else
+        mass = find_mass(pixels, w, h);
+
+    for (y = 0; y < h; y++)
+    {
+        unsigned char *row = pixels[y];
+        for (x = 0; x < w; x++)
+        {
+            if (row[x])
+            {
+                sx += x;
+                sy += y;
+            }
+        }
+    }
+
+    if (cx) *cx = quant * sx / mass;
+    if (cy) *cy = quant * sy / mass;
+    if (m) *m = mass;
+}
+
+
+#ifdef TESTING
+
+/* Try writing into the pointer array and the bitmap.
+ * If something nasty happens, Valgrind should print an error.
+ */
+static void try_to_write_into_bitmap(unsigned char **bitmap, int w, int h)
+{
+    int i, j;
+
+    assert(bitmap);
+    for (i = 0; i < h; i++)
+    {
+        unsigned char *save = bitmap[i];
+        assert(save);
+        bitmap[i] = NULL;
+        for (j = 0; j < w; j++)
+        {
+            unsigned char save_pixel = save[j];
+            save[j] = 0;
+            save[j] = save_pixel;
+        }
+        bitmap[i] = save;
+    }
+}
+
+
+/* Check that the bitmap is in fact a contiguous memory block. */
+static void test_bitmap_integrity(unsigned char **bitmap, int w, int h)
+{
+    int i;
+    try_to_write_into_bitmap(bitmap, w, h);
+    for (i = 0; i < h; i++)
+    {
+        assert(bitmap[i] == bitmap[0] + w * i);
+    }
+}
+
+static void allocate_bitmap_basic_test()
+{
+    int w = 10;
+    int h = 10;
+    unsigned char **bitmap = allocate_bitmap(w, h);
+    test_bitmap_integrity(bitmap, w, h);
+    free_bitmap(bitmap);    
+}
+
+
+static TestFunction tests[] = {
+    allocate_bitmap_basic_test,
+    NULL
+};
+
+TestSuite bitmaps_suite = {"bitmaps", NULL, NULL, tests};
+
+
+#endif /* TESTING */

@@ -33,7 +33,9 @@ typedef struct
     Rope *ropes;
     int node_count;
     int rope_count;
-    int node_allocated;  // well, in fact we can hide those
+    int width;           // of the original picture
+    int height;
+    int node_allocated;  // in fact, these two fields should be hidden
     int rope_allocated;
 } Chaincode;
 
@@ -69,7 +71,7 @@ Chaincode *chaincode_compute(unsigned char **pixels, int w, int h);
 void chaincode_print(Chaincode *);
 
 
-Chaincode *chaincode_create(void);
+Chaincode *chaincode_create(int width, int height);
 void chaincode_destroy(Chaincode *);
 
 
@@ -79,6 +81,16 @@ void chaincode_destroy(Chaincode *);
  */
 Chaincode *chaincode_scale(Chaincode *cc, double coef);
 
+unsigned char **chaincode_render(Chaincode *cc);
+
+void chaincode_get_rope_middle_point(Chaincode *cc, int rope_index, int *px, int *py);
+
+
 FUNCTIONS_END
+
+#ifdef TESTING
+extern TestSuite chaincode_suite;
+#endif
+
 
 #endif

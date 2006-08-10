@@ -24,8 +24,21 @@
 #define PLASMA_OCR_COMMON_H
 
 
+#ifndef NDEBUG
+#   ifndef NTESTING
+#       define TESTING
+#   endif
+#endif
+
+
+#ifdef TESTING
+    #include "testing.h"
+#endif
+
+
+
 #ifdef HAVE_CONFIG_H
-    #include "config.h"
+#   include "config.h"
 #endif
 
 

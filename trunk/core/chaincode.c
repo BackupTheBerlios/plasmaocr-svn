@@ -6,12 +6,14 @@
 #include <stdio.h>
 
 
-#define HOT_POINT  2
+#define HOT_POINT  2  // a black point is hot when its degree is not 2
 
 
-Chaincode *chaincode_create()
+Chaincode *chaincode_create(int w, int h)
 {
     Chaincode *cc = MALLOC1(Chaincode);
+    cc->width = w;
+    cc->height = h;
     cc->node_count = 0;
     cc->rope_count = 0;
     cc->node_allocated = 10;
@@ -40,7 +42,7 @@ Node *chaincode_append_node(Chaincode *cc)
  * When we have crossed the (dx, dy) edge of our hot point in either direction,
  * we mark it by setting two bits.
  *
- * The 6th and 4th bits are useless.
+ * The 6th and 3th bits are useless.
  */
 #define PASSED_MARK(dx, dy) ((1 << ((dx) + 6)) | (1 << ((dy) + 3)))
 
@@ -78,6 +80,16 @@ static int count_passed_edges(unsigned char pixel)
 char chaincode_char(int dx, int dy)
 {
     return '5' + dx - (dy << 1) - dy; 
+}
+
+int chaincode_dx(char c)
+{
+    return (c - '1') % 3 - 1;
+}
+
+int chaincode_dy(char c)
+{
+    return -((c - '1') / 3 - 1);
 }
 
 
@@ -183,7 +195,7 @@ static void walk(Chaincode *cc, int start_node, unsigned char **pixels, int dx, 
     rope = chaincode_append_rope(cc);
     rope->start = start_node;
     rope->end = find_node(cc, x, y);
-    rope->steps = REALLOC(char, steps, count);;
+    rope->steps = REALLOC(char, steps, count);
     rope->length = count;
     cc->nodes[rope->end].rope_indices[count_passed_edges(pixels[y][x]) - 1] = cc->rope_count - 1;
 }
@@ -275,10 +287,10 @@ static void take_all_cycles(Chaincode *cc, unsigned char **pixels, int w, int h)
         {
             /* we're searching for the following pattern:
              *
-             *   00
+             *    0
              *   01 <- not hotpoint
              */
-            if (!row[x - 1] && !upper[x - 1] && !upper[x])
+            if (!row[x - 1] && !upper[x])
             {
                 take_cycle(cc, pixels, x, y);
             }
@@ -290,7 +302,7 @@ static void take_all_cycles(Chaincode *cc, unsigned char **pixels, int w, int h)
 Chaincode *chaincode_compute_internal(unsigned char **framework, int w, int h)
 {
     int i;
-    Chaincode *cc = chaincode_create();
+    Chaincode *cc = chaincode_create(w, h);
     search_hot_points(cc, framework, w, h);
     mark_hot_points(cc, framework, w, h);
     
@@ -317,12 +329,14 @@ void chaincode_destroy(Chaincode *cc)
 {
     Node *nodes = cc->nodes;
     Rope *ropes = cc->ropes;
+
     int rope_count = cc->rope_count;
     int node_count = cc->node_count;
     int i;
     
     for (i = 0; i < rope_count; i++)
-        free(ropes[i].steps);
+        if (ropes[i].steps)
+            FREE(ropes[i].steps);
 
     for (i = 0; i < node_count; i++)
     {
@@ -330,9 +344,10 @@ void chaincode_destroy(Chaincode *cc)
             free(nodes[i].rope_indices);
     }
 
-    free(ropes);
-    free(nodes);
-    free(cc);
+    if (ropes) FREE(ropes);
+    if (nodes) FREE(nodes);
+    
+    FREE1(cc);
 }
 
 
@@ -418,10 +433,14 @@ Chaincode *chaincode_scale(Chaincode *cc, double coef)
 {
     int i;
     Chaincode *result = MALLOC1(Chaincode);
+    result->width  = (int) (cc->width  * coef);
+    result->height = (int) (cc->height * coef);
     result->node_count = result->node_allocated = cc->node_count;
     result->rope_count = result->rope_allocated = cc->rope_count;
     result->nodes = MALLOC(Node, result->node_allocated);
     result->ropes = MALLOC(Rope, result->rope_allocated);
+    assert(coef > 0);
+    assert(coef < 1e5);
     
     /* Copy nodes */
     for (i = 0; i < result->node_count; i++)
@@ -436,7 +455,7 @@ Chaincode *chaincode_scale(Chaincode *cc, double coef)
     }
 
     /* Scale ropes */
-    for (i = 0; i < result->node_count; i++)
+    for (i = 0; i < result->rope_count; i++)
     {
         result->ropes[i].start = cc->ropes[i].start;
         result->ropes[i].end = cc->ropes[i].end;
@@ -454,3 +473,108 @@ Chaincode *chaincode_compute(unsigned char **pixels, int w, int h)
     free_bitmap_with_margins(framework);
     return result;
 }
+
+
+// ____________________________   render   ___________________________
+
+static void render_path(Chaincode *cc, int rope_index, unsigned char **bitmap, int w, int h)
+{
+    Rope *rope = &cc->ropes[rope_index];
+    Node *node = &cc->nodes[rope->start];
+    int x = node->x;
+    int y = node->y;
+    int i;
+    char *s = rope->steps;
+    int n = rope->length;
+    for (i = 0; i < n; i++)
+    {
+        x += chaincode_dx(s[i]);
+        y += chaincode_dy(s[i]);
+        assert(x >= 0 && x < w);
+        assert(y >= 0 && y < h); 
+        bitmap[y][x] = 1;
+    }
+    assert(x == cc->nodes[rope->end].x);
+    assert(y == cc->nodes[rope->end].y);
+}
+
+void chaincode_get_rope_middle_point(Chaincode *cc, int rope_index, int *px, int *py)
+{
+    Rope *rope = &cc->ropes[rope_index];
+    Node *node = &cc->nodes[rope->start];
+    int x = node->x;
+    int y = node->y;
+    int i;
+    char *s = rope->steps;
+    int n = rope->length;
+    for (i = 0; i < n / 2; i++)
+    {
+        x += chaincode_dx(s[i]);
+        y += chaincode_dy(s[i]);
+    }
+    *px = x;
+    *py = y;
+}
+
+unsigned char **chaincode_render(Chaincode *cc)
+{
+    int w = cc->width;
+    int h = cc->height;
+    int i;
+    unsigned char **bitmap = allocate_bitmap(w, h);
+    clear_bitmap(bitmap, w, h);
+    for (i = 0; i < cc->node_count; i++)
+    {
+        int x = cc->nodes[i].x;
+        int y = cc->nodes[i].y;
+        assert(x >= 0 && x < w);
+        assert(y >= 0 && y < h); 
+        bitmap[y][x] = 1;
+    }
+    for (i = 0; i < cc->rope_count; i++)
+        render_path(cc, i, bitmap, w, h);
+
+    return bitmap;
+}
+
+#ifdef TESTING
+
+void get_chaincode_and_render(unsigned char **framework, int w, int h)
+{
+    unsigned char **copy = allocate_bitmap_with_white_margins(w, h);
+    Chaincode *cc;
+    unsigned char **rendered;
+    assign_bitmap(copy, framework, w, h);
+    cc = chaincode_compute_internal(copy, w, h);
+    rendered = chaincode_render(cc);
+    assert(bitmaps_equal(framework, rendered, w, h));
+    free_bitmap(rendered);
+    free_bitmap_with_margins(copy);
+    chaincode_destroy(cc);
+}
+
+void test_render()
+{
+    int i;
+    int w = 3;
+    int h = 4;
+    unsigned char **bitmap = allocate_bitmap_with_white_margins(w, h);
+    for (i = 0; i < (1 << w * h); i++)
+    {
+        int x, y;
+        for (y = 0; y < h; y++) for (x = 0; x < w; x++)
+            bitmap[y][x] =  (((1 << (y * w + x)) & i)  ?  1  :  0);
+        
+        get_chaincode_and_render(bitmap, w, h);
+    }
+    free_bitmap_with_margins(bitmap);
+}
+
+static TestFunction tests[] = {
+    test_render,
+    NULL
+};
+
+TestSuite chaincode_suite = {"chaincode", NULL, NULL, tests};
+
+#endif
