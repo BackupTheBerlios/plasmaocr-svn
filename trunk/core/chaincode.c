@@ -1,6 +1,7 @@
 #include "chaincode.h"
 #include "bitmaps.h"
 #include "thinning.h"
+#include "io.h"
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
@@ -9,6 +10,10 @@
 #define HOT_POINT  2  // a black point is hot when its degree is not 2
 
 
+/* Create a Chaincode and set its width and height.
+ * 
+ * Note: there are other functions that may create Chaincode directly.
+ */
 Chaincode *chaincode_create(int w, int h)
 {
     Chaincode *cc = MALLOC1(Chaincode);
@@ -466,6 +471,25 @@ Chaincode *chaincode_scale(Chaincode *cc, double coef)
 }
 
 
+void chaincode_get_rope_middle_point(Chaincode *cc, int rope_index, int *px, int *py)
+{
+    Rope *rope = &cc->ropes[rope_index];
+    Node *node = &cc->nodes[rope->start];
+    int x = node->x;
+    int y = node->y;
+    int i;
+    char *s = rope->steps;
+    int n = rope->length;
+    for (i = 0; i < n / 2; i++)
+    {
+        x += chaincode_dx(s[i]);
+        y += chaincode_dy(s[i]);
+    }
+    *px = x;
+    *py = y;
+}
+
+
 Chaincode *chaincode_compute(unsigned char **pixels, int w, int h)
 {
     unsigned char **framework = skeletonize(pixels, w, h, /* 8-conn.: */ 0);
@@ -498,23 +522,6 @@ static void render_path(Chaincode *cc, int rope_index, unsigned char **bitmap, i
     assert(y == cc->nodes[rope->end].y);
 }
 
-void chaincode_get_rope_middle_point(Chaincode *cc, int rope_index, int *px, int *py)
-{
-    Rope *rope = &cc->ropes[rope_index];
-    Node *node = &cc->nodes[rope->start];
-    int x = node->x;
-    int y = node->y;
-    int i;
-    char *s = rope->steps;
-    int n = rope->length;
-    for (i = 0; i < n / 2; i++)
-    {
-        x += chaincode_dx(s[i]);
-        y += chaincode_dy(s[i]);
-    }
-    *px = x;
-    *py = y;
-}
 
 unsigned char **chaincode_render(Chaincode *cc)
 {
@@ -537,20 +544,123 @@ unsigned char **chaincode_render(Chaincode *cc)
     return bitmap;
 }
 
+
+// ____________________________   save/load   ___________________________
+
+
+static void check_place_for_rope(Chaincode *cc, int current_degree, int node)
+{
+    if (current_degree >= cc->nodes[node].degree)
+    {
+        fprintf(stderr, "An error occured while reading chaincode object; file corrupted?");
+        exit(1);
+    }
+}
+
+
+Chaincode *chaincode_load(FILE *f)
+{
+    int n = read_int32(f);
+    int r = read_int32(f);
+    int *degree_table; // how many ropes we've connected so far to a vertex
+    int i;
+    Chaincode *cc = MALLOC1(Chaincode);
+    
+    cc->node_count = cc->node_allocated = n;
+    cc->rope_count = cc->rope_allocated = r;
+    cc->nodes = MALLOC(Node, n);
+    cc->ropes = MALLOC(Rope, r);
+
+    cc->width = read_int32(f);
+    cc->height = read_int32(f);
+
+    for (i = 0; i < n; i++)
+    {
+        cc->nodes[i].x = read_int32(f);
+        cc->nodes[i].y = read_int32(f);
+        cc->nodes[i].degree = read_int32(f);
+        cc->nodes[i].rope_indices = MALLOC(int, cc->nodes[i].degree);
+        memset(cc->nodes[i].rope_indices, 0, cc->nodes[i].degree * sizeof(int));
+    }
+
+    degree_table = MALLOC(int, n);
+    memset(degree_table, 0, n * sizeof(int));
+
+    for (i = 0; i < r; i++)
+    {
+        int s = cc->ropes[i].start  = read_int32(f);
+        int e = cc->ropes[i].end    = read_int32(f);
+        int l = cc->ropes[i].length = read_int32(f);
+
+        check_place_for_rope(cc, degree_table[s], s);
+        cc->nodes[s].rope_indices[degree_table[s]++] = i; 
+        check_place_for_rope(cc, degree_table[e], e);
+        cc->nodes[e].rope_indices[degree_table[e]++] = i;
+        
+        cc->ropes[i].steps = MALLOC(char, l);
+        fread(cc->ropes[i].steps, 1, l, f);
+    }
+    
+    FREE(degree_table);
+    return cc;
+}
+
+
+void chaincode_save(Chaincode *cc, FILE *f)
+{
+    int n = cc->node_count;
+    int r = cc->rope_count;
+    int i;
+    
+    write_int32(n, f);
+    write_int32(r, f);
+    write_int32(cc->width, f);
+    write_int32(cc->height, f);
+
+    for (i = 0; i < n; i++)
+    {
+        write_int32(cc->nodes[i].x, f);
+        write_int32(cc->nodes[i].y, f);
+        write_int32(cc->nodes[i].degree, f);
+    }
+
+    for (i = 0; i < r; i++)
+    {
+        write_int32(cc->ropes[i].start, f);
+        write_int32(cc->ropes[i].end, f);
+        write_int32(cc->ropes[i].length, f);
+        fwrite(cc->ropes[i].steps, 1, cc->ropes[i].length, f);
+    }
+}
+
+
+// ____________________________   testing   ___________________________
+
+
 #ifdef TESTING
 
-void get_chaincode_and_render(unsigned char **framework, int w, int h)
+
+#include <unistd.h>
+
+void get_chaincode_and_render(unsigned char **framework, int w, int h, FILE *fr, FILE *fw)
 {
     unsigned char **copy = allocate_bitmap_with_white_margins(w, h);
-    Chaincode *cc;
+    Chaincode *cc, *cc2;
     unsigned char **rendered;
     assign_bitmap(copy, framework, w, h);
     cc = chaincode_compute_internal(copy, w, h);
     rendered = chaincode_render(cc);
     assert(bitmaps_equal(framework, rendered, w, h));
     free_bitmap(rendered);
+    chaincode_save(cc, fw);
+    fflush(fw);
+    cc2 = chaincode_load(fr);
+    rendered = chaincode_render(cc2);
+    assert(bitmaps_equal(framework, rendered, w, h));
+    free_bitmap(rendered);    
     free_bitmap_with_margins(copy);
     chaincode_destroy(cc);
+    chaincode_destroy(cc2);
 }
 
 void test_render()
@@ -558,6 +668,12 @@ void test_render()
     int i;
     int w = 3;
     int h = 4;
+    int filedes[2];
+    FILE *fr, *fw;
+    pipe(filedes);
+    fr = fdopen(filedes[0], "rb");
+    fw = fdopen(filedes[1], "wb");
+    
     unsigned char **bitmap = allocate_bitmap_with_white_margins(w, h);
     for (i = 0; i < (1 << w * h); i++)
     {
@@ -565,9 +681,11 @@ void test_render()
         for (y = 0; y < h; y++) for (x = 0; x < w; x++)
             bitmap[y][x] =  (((1 << (y * w + x)) & i)  ?  1  :  0);
         
-        get_chaincode_and_render(bitmap, w, h);
+        get_chaincode_and_render(bitmap, w, h, fr, fw);
     }
     free_bitmap_with_margins(bitmap);
+    fclose(fr);
+    fclose(fw);
 }
 
 static TestFunction tests[] = {

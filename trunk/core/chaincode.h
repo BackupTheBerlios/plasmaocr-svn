@@ -3,6 +3,7 @@
 
 
 #include "common.h"
+#include <stdio.h>
 
 typedef struct
 {
@@ -84,6 +85,9 @@ Chaincode *chaincode_scale(Chaincode *cc, double coef);
 unsigned char **chaincode_render(Chaincode *cc);
 
 void chaincode_get_rope_middle_point(Chaincode *cc, int rope_index, int *px, int *py);
+
+Chaincode *chaincode_load(FILE *f);
+void chaincode_save(Chaincode *cc, FILE *f);
 
 
 FUNCTIONS_END
