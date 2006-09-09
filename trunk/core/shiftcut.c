@@ -86,7 +86,7 @@ static void make_hcut(int a, int l, int w, int h,
     int cut = 0; /* how many rows are in the top part */
     int up_weight = 0;
 
-    if (k > sizeof(Fingerprint)) return;
+    if (k > (int) sizeof(Fingerprint)) return;
 
     if (a)
     {
@@ -130,7 +130,7 @@ static void make_vcut(int a, int l, int w, int h,
     int cut = 0;          /* how many columns are in the left part */
     int left_weight = 0;
 
-    if (k > sizeof(Fingerprint)) return;
+    if (k > (int) sizeof(Fingerprint)) return;
 
     if (a)
     {
@@ -198,7 +198,7 @@ long fingerprint_distance_squared(Fingerprint f1, Fingerprint f2)
     int i;
     long s = 0;
 
-    for (i = 0; i < sizeof(Fingerprint); i++)
+    for (i = 0; i < (int) sizeof(Fingerprint); i++)
     {
         long difference = f1[i] - f2[i];
         s += difference * difference;

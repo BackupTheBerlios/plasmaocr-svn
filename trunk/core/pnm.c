@@ -83,7 +83,7 @@ static void load_pbm_raster(FILE *f, unsigned char **pixels, int w, int h)
     unsigned char *row = MALLOC(unsigned char, n);
     for (i = 0; i < h; i++)
     {
-        if (fread(row, 1, n, f) != n)
+        if (fread(row, 1, n, f) != (unsigned) n)
         {
             fprintf(stderr, "problem in PBM file raster\n");
             exit(1);

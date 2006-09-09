@@ -588,9 +588,6 @@ Opinion *core_recognize_letter(Library l, int no_blacks, unsigned char **pixels,
     Sample **samples = MALLOC(Sample *, l->n);
     int matches_found = 0;
     int i;
-    int best_match;
-    int best_penalty;
-    int penalty;
     Opinion *opinion;
 
     assert(l->n > 0);
@@ -616,6 +613,9 @@ Opinion *core_recognize_letter(Library l, int no_blacks, unsigned char **pixels,
         Match *good_matches = MALLOC(Match, matches_found);
         Sample **good_samples = MALLOC(Sample *, matches_found);
         int good_matches_found = 0;
+        int best_match = -1;
+        int best_penalty = -1;
+        int penalty;
         
         // Another pass over matches, this time with ED-comparison
         for (i = 0; i < matches_found; i++)

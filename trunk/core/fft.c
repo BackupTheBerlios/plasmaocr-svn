@@ -273,7 +273,7 @@ static void test_sanity()
 
     /* Check that big_int can hold P-1 squared. */
     b = p * p;
-    assert(b == p * p);
+    assert(b == (big_int) p * p);
 }
 
 

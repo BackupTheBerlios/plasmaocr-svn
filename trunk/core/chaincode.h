@@ -89,6 +89,9 @@ void chaincode_get_rope_middle_point(Chaincode *cc, int rope_index, int *px, int
 Chaincode *chaincode_load(FILE *f);
 void chaincode_save(Chaincode *cc, FILE *f);
 
+char chaincode_char(int dx, int dy);
+int chaincode_dx(char c);
+int chaincode_dy(char c);
 
 FUNCTIONS_END
 
