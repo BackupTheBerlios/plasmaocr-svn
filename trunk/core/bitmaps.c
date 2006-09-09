@@ -127,6 +127,8 @@ void strip_endpoints_4(unsigned char **result, unsigned char **pixels, int w, in
 
     assert(result != pixels);
 
+    clear_bitmap(result, w, h);
+
     for (y = 0; y < h; y++) for (x = 0; x < w; x++) if (pixels[y][x])
     {
         int degree = pixels[y - 1][x] + pixels[y + 1][x]
@@ -142,6 +144,8 @@ void strip_endpoints_8(unsigned char **result, unsigned char **pixels, int w, in
     int x, y;
 
     assert(result != pixels);
+
+    clear_bitmap(result, w, h);
 
     for (y = 0; y < h; y++) for (x = 0; x < w; x++) if (pixels[y][x])
     {

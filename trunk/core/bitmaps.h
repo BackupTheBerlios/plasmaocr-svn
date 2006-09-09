@@ -71,7 +71,6 @@ void clear_bitmap(unsigned char **pixels, int w, int h);
 int bitmaps_equal(unsigned char **p1, unsigned char **p2, int w, int h);
 
 /* Clear pixels that have exactly 1 of 4 (or 8) neighbors.
- * (Well, I have in mind some usage for this one).
  *
  * `pixels' must have margins.
  *
