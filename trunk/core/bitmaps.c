@@ -113,6 +113,14 @@ void assign_bitmap(unsigned char **dst, unsigned char **src, int w, int h)
 }
 
 
+void assign_bitmap_with_offsets(unsigned char **dst, unsigned char **src, int w, int h, int dst_offset, int src_offset)
+{
+    int i;
+    for (i = 0; i < h; i++)
+        memcpy(dst[i] + dst_offset, src[i] + src_offset, w);
+}
+
+
 unsigned char **copy_bitmap(unsigned char **src, int w, int h)
 {
     unsigned char **result = allocate_bitmap(w, h);

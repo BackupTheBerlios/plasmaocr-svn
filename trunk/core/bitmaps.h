@@ -37,6 +37,7 @@ FUNCTIONS_BEGIN
 unsigned char **allocate_bitmap(int w, int h);
 void free_bitmap(unsigned char **);
 void assign_bitmap(unsigned char **dst, unsigned char **src, int w, int h);
+void assign_bitmap_with_offsets(unsigned char **dst, unsigned char **src, int w, int h, int dst_offset, int src_offset);
 unsigned char **copy_bitmap(unsigned char **, int w, int h);
 
 

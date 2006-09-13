@@ -76,4 +76,12 @@
 }
 
 
+#define LIST_CREATE(TYPE, LIST, COUNT, ALLOCATED, START) \
+{                                                        \
+    (LIST) = MALLOC(TYPE, START);                        \
+    (ALLOCATED) = (START);                               \
+    (COUNT) = 0;                                         \
+}
+
+
 #endif

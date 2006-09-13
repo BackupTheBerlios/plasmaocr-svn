@@ -1,0 +1,46 @@
+#ifndef PLASMA_OCR_LIBRARY_H
+#define PLASMA_OCR_LIBRARY_H
+
+
+#define MAX_TEXT_SIZE 20
+
+#include "pattern.h"
+
+typedef struct LibraryStruct *Library;
+
+typedef struct
+{
+    Pattern pattern;
+    char text[MAX_TEXT_SIZE]; // "" - unknown
+    int radius;
+    int left, top, width, height;
+    int disabled;
+} LibraryRecord;
+
+
+typedef struct
+{
+    LibraryRecord *records;
+    int count;
+    int allocated;
+    unsigned char **pixels;
+    int width, height;
+    int ownership; // if nonzero, `pixels' will be freed in the end
+    long offset_in_file;
+} Shelf;
+
+
+Shelf *shelf_create(Library);
+LibraryRecord *shelf_append(Shelf *);
+
+Library library_create();
+Library library_open(const char *path);
+void library_read_prototypes(Library);
+void library_discard_prototypes(Library);
+void library_destroy(Library);
+void library_write(Library, const char *path);
+int library_shelves_count(Library);
+Shelf *library_get_shelf(Library, int i);
+
+
+#endif
