@@ -2,6 +2,7 @@
 #include "bitmaps.h"
 #include "pnm.h"
 #include "io.h"
+#include "rle.h"
 #include <string.h>
 #include <assert.h>
 
@@ -19,7 +20,7 @@ void rle_encode_raw(FILE *f, unsigned char *pixels, int n)
     {
         int wrun = 0, brun = 0;
         
-        // gather white run
+        /* gather white run */
         while (!pixels[i] && i < n && wrun < MAX_WHITE_RUN)
         {
             i++;
@@ -61,8 +62,9 @@ void rle_decode_raw(FILE *f, unsigned char *pixels, int n)
 
 void rle_encode_FILE(FILE *f, unsigned char **pixels, int w, int h)
 {
-    // Well, that is a "suboptimal" way to encode,
-    // but we don't care here for speed.
+    /* Well, that is a "suboptimal" way to encode,
+     * but we don't care here for speed.
+     */
     unsigned char *buf = MALLOC(unsigned char, w * h);
     int i;
 
@@ -102,7 +104,7 @@ void rle_decode_FILE(FILE *f, unsigned char ***pixels, int *w, int *h)
     *w = read_int32(f);
     *h = read_int32(f);
 
-    if (magic != MAGIC || w <= 0 || h <= 0)
+    if (magic != MAGIC || *w <= 0 || *h <= 0)
     {
         fprintf(stderr, "RLE encoded data expected, but not found\n");
         exit(1);

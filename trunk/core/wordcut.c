@@ -52,8 +52,9 @@ static int other_end(int node_index, Rope *rope)
 }
 
 
-// A hedgehog is a vertex whose adjacent vertices (except that via rope #rope_index)
-// are all hanging (have degree 1).
+/* A hedgehog is a vertex whose adjacent vertices (except that via rope #rope_index)
+ * are all hanging (have degree 1).
+ */
 
 static int is_hedgehog(Chaincode *cc, int node_index, int rope_index)
 {
@@ -105,9 +106,10 @@ static void fill_shields(int w, unsigned char *shields, int level, unsigned char
 static int *make_histogram(unsigned char **pixels, int w, int h)
 {
     int *histogram = MALLOC(int, w);
+    int i, j;
     memset(histogram, 0, w * sizeof(int));
-    for (int i = 0; i < h; i++)
-        for (int j = 0; j < w; j++)
+    for (i = 0; i < h; i++)
+        for (j = 0; j < w; j++)
             if (pixels[i][j])
                 histogram[j]++;
     return histogram;
@@ -152,25 +154,20 @@ WordCut *cut_word(unsigned char **pixels, int w, int h)
     int i;
     int rope_count;
     
-    /*unsigned char **fw1 = skeletonize(pixels, w, h, 0);
-    unsigned char **fw2 = allocate_bitmap_with_white_margins(w, h);
-    strip_endpoints_4(fw2, fw1, w, h); // dangerous!
-    cc = chaincode_compute_internal(fw2, w, h);*/
     cc = chaincode_compute(pixels, w, h);
-    /*free_bitmap_with_margins(fw1);
-    free_bitmap_with_margins(fw2);*/
     rope_count = cc->rope_count;
 
-    // shield level n prevents cuts with level above n.
-    // (the less the shield level, the stronger it is)
+    /* shield level n prevents cuts with level above n.
+     * (the less the shield level, the stronger it is)
+     */
     wc->count = 0;
     wc->position = MALLOC(int, w);
     wc->window_start = MALLOC(int, w);
     wc->window_end = MALLOC(int, w);
     wc->level = MALLOC(unsigned char, w);
-    wc->max_level = 1; // XXX
+    wc->max_level = 1; /* XXX */
     
-    memset(shields, 255, w); // weakest shields, prevent no cuts
+    memset(shields, 255, w); /* weakest shields, prevent no cuts */
 
     for (i = 0; i < rope_count; i++)
     {
@@ -185,15 +182,15 @@ WordCut *cut_word(unsigned char **pixels, int w, int h)
     {
         int begin, end;
         
-        // skip shields
+        /* skip shields */
         while (i < w && shields[i] < 255) i++;
         begin = i;
-        // skip window
+        /* skip window */
         while (i < w && shields[i] == 255) i++;
         end = i;
         if (i == w) break;
 
-        // add the cut
+        /* add the cut */
         wc->level[wc->count] = 1;
         wc->window_start[wc->count] = begin;
         wc->window_end[wc->count] = end;
@@ -214,7 +211,7 @@ WordCut *cut_word(unsigned char **pixels, int w, int h)
 }
 
 
-void word_cut_destroy(WordCut *w)
+void destroy_word_cut(WordCut *w)
 {
     FREE(w->level);
     FREE(w->position);

@@ -1,17 +1,19 @@
 #include "common.h"
+#include "editdist.h"
 #include <string.h>
 #include <stdio.h>
 
 #define REPLACE_PENALTY 100
 #define SHIFT_PENALTY   100
 #define SWAP_PENALTY     50
-#define MATCH_PENALTY   (-radius) //KLUGE...
+#define MATCH_PENALTY   (-radius) /* KLUGE... */
 
 
 int edit_distance(int radius, const char *s1, int n1, const char *s2, int n2)
 {
-    // We're going to fill a table.
-    // We need only three consecutive rows.
+    /* We're going to fill a table.
+     * We need only three consecutive rows.
+     */
     
     int *table = (int *) malloc(3 * (n1 + 1) * sizeof(int));
     int *row0 = table;
@@ -25,7 +27,7 @@ int edit_distance(int radius, const char *s1, int n1, const char *s2, int n2)
         int j;
         int *tmp;
 
-        // fill row2 (row1 is immediately above, row0 is above row1)
+        /* fill row2 (row1 is immediately above, row0 is above row1) */
         row2[0] = i * SHIFT_PENALTY;
         
         for (j = 1; j <= n1; j++)
@@ -53,7 +55,7 @@ int edit_distance(int radius, const char *s1, int n1, const char *s2, int n2)
             row2[j] = best;
         }
 
-        // rotate: row2 into row1, etc
+        /* rotate: row2 into row1, etc */
         tmp = row0;
         row0 = row1;
         row1 = row2;
@@ -76,9 +78,9 @@ static void ed(int radius, const char *s1, const char *s2, int result)
     assert(edit_distance(radius, s2, n2, s1, n1) == result);
 }
 
-static void test_ed()
+static void test_ed(void)
 {
-    // TODO: better tests
+    /* TODO: better tests */
     int radius = 100;
     ed(radius, "a", "b", REPLACE_PENALTY);
     ed(radius, "ab", "ab", 2*MATCH_PENALTY);

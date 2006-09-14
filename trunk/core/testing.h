@@ -19,6 +19,10 @@ typedef struct
     TestFunction *tests;
 } TestSuite;
 
+#else
+
+/* only to keep the compiler happy (it may complain on empty files) */
+void dummy_function_testing(void);
 
 #endif /* TESTING */
 #endif /* not TESTING_H */

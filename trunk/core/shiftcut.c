@@ -41,7 +41,7 @@ typedef unsigned char byte;
 static int sum_column_gray(byte **pixels, int x, int y1, int y2)
 {
     int sum = 0, y;
-    for (y = y1; y <= y2; y++) sum += 255 - pixels[y][x]; // XXX
+    for (y = y1; y <= y2; y++) sum += 255 - pixels[y][x]; /* XXX */
     return sum;
 }
 
@@ -50,7 +50,7 @@ static int sum_row_gray(byte *row, int x1, int x2)
 {
     int sum = 0, x, n = x2 - x1;
     byte *p = row + x1;
-    for (x = 0; x <= n; x++) sum += 255 - p[x]; // XXX
+    for (x = 0; x <= n; x++) sum += 255 - p[x]; /* XXX */
     return sum;
 }
 

@@ -7,7 +7,7 @@
 #include <stdio.h>
 
 
-#define HOT_POINT  2  // a black point is hot when its degree is not 2
+#define HOT_POINT  2  /* a black point is hot when its degree is not 2 */
 
 
 /* Create a Chaincode and set its width and height.
@@ -418,7 +418,7 @@ static void scale_rope(Chaincode *cc, Rope *rope, Rope *new_rope, double coef)
             case '2': y += coef; dy =  1; new_cell_y = (int) y; break;
         }
 
-        // Scale one step
+        /* Scale one step */
         while (new_cell_x != current_cell_x  ||  new_cell_y != current_cell_y)
         {
             current_cell_x += dx;
@@ -499,7 +499,7 @@ Chaincode *chaincode_compute(unsigned char **pixels, int w, int h)
 }
 
 
-// ____________________________   render   ___________________________
+/* ____________________________   render   ___________________________ */
 
 static void render_path(Chaincode *cc, int rope_index, unsigned char **bitmap, int w, int h)
 {
@@ -545,7 +545,7 @@ unsigned char **chaincode_render(Chaincode *cc)
 }
 
 
-// ____________________________   save/load   ___________________________
+/* ____________________________   save/load   ___________________________ */
 
 
 static void check_place_for_rope(Chaincode *cc, int current_degree, int node)
@@ -562,7 +562,7 @@ Chaincode *chaincode_load(FILE *f)
 {
     int n = read_int32(f);
     int r = read_int32(f);
-    int *degree_table; // how many ropes we've connected so far to a vertex
+    int *degree_table; /* how many ropes we've connected so far to a vertex */
     int i;
     Chaincode *cc = MALLOC1(Chaincode);
     
@@ -634,7 +634,7 @@ void chaincode_save(Chaincode *cc, FILE *f)
 }
 
 
-// ____________________________   testing   ___________________________
+/* ____________________________   testing   ___________________________ */
 
 
 #ifdef TESTING
@@ -642,7 +642,7 @@ void chaincode_save(Chaincode *cc, FILE *f)
 
 #include <unistd.h>
 
-void get_chaincode_and_render(unsigned char **framework, int w, int h, FILE *fr, FILE *fw)
+static void get_chaincode_and_render(unsigned char **framework, int w, int h, FILE *fr, FILE *fw)
 {
     unsigned char **copy = allocate_bitmap_with_white_margins(w, h);
     Chaincode *cc, *cc2;
@@ -663,18 +663,22 @@ void get_chaincode_and_render(unsigned char **framework, int w, int h, FILE *fr,
     chaincode_destroy(cc2);
 }
 
-void test_render()
+/* for our "maniac" compiling mode */
+FILE *fdopen(int fildes, const char *mode);
+
+static void test_render(void)
 {
     int i;
     int w = 3;
     int h = 4;
     int filedes[2];
     FILE *fr, *fw;
+    unsigned char **bitmap;
     pipe(filedes);
     fr = fdopen(filedes[0], "rb");
     fw = fdopen(filedes[1], "wb");
     
-    unsigned char **bitmap = allocate_bitmap_with_white_margins(w, h);
+    bitmap = allocate_bitmap_with_white_margins(w, h);
     for (i = 0; i < (1 << w * h); i++)
     {
         int x, y;

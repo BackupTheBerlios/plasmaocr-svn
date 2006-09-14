@@ -4,6 +4,55 @@
 #include "rle.h"
 
 
+void library_iterator_init(LibraryIterator *li, int n, Library *libs)
+{
+    li->libraries_count = n;
+    li->libraries = 0;
+    li->current_library_index = 0;
+    li->current_shelf_index = 0;
+
+    if (n && library_shelves_count(*libs))
+        li->current_shelf = library_get_shelf(*libs, 0);
+    else
+        li->current_shelf = NULL;
+
+    li->current_record_index = 0;
+}
+
+LibraryRecord *library_iterator_next(LibraryIterator *li)
+{
+    Library l;
+    if (li->current_library_index == -1)
+        return NULL;
+    
+    l = li->libraries[li->current_library_index];
+
+    li->current_record_index++;
+    if (li->current_record_index == li->current_shelf->count)
+    {
+        /* change shelf */
+        li->current_record_index = 0;
+        li->current_shelf_index++;
+        if (li->current_shelf_index == library_shelves_count(l))
+        {
+            /* change library */
+            li->current_library_index++;
+            l = li->libraries[li->current_library_index];
+            li->current_shelf_index = 0;
+            if (li->current_library_index == li->libraries_count)
+            {
+                /* finish */
+                li->current_library_index = -1;
+                return NULL;
+            }
+        }
+        li->current_shelf = library_get_shelf
+                                (l, li->current_shelf_index);
+    }
+    return &li->current_shelf->records[li->current_record_index];
+}
+
+
 struct LibraryStruct
 {
     int count;
@@ -22,7 +71,7 @@ static Shelf *library_append_shelf(Library l)
 
 
 
-// _______________________   loading/saving records   _________________________
+/* _______________________   loading/saving records   _________________________ */
 
 /* The record is stored in this way:
  *
@@ -58,7 +107,7 @@ static void save_record(LibraryRecord *lr, FILE *f)
     }
 }
 
-// _______________________   loading/saving shelves   _________________________
+/* _______________________   loading/saving shelves   _________________________ */
 
 
 static int load_shelf(Library l, FILE *f)
@@ -124,7 +173,7 @@ static void save_shelf(Shelf *s, FILE *f)
     long pos1, pos2;
     int i;
     pos1 = ftell(f);
-    write_int32(0, f); // to be overwritten later
+    write_int32(0, f); /* to be overwritten later */
     shelf_save_prototype(s, f);
     pos2 = ftell(f);
     fseek(f, pos1, SEEK_SET);

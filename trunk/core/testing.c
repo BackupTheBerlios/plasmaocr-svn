@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "bitmaps.h"
-#include "fft.h"
 #include "chaincode.h"
 #include "editdist.h"
 
@@ -13,7 +12,7 @@
 /* This test is useless - its success is guaranteed by the language standard.
  * In fact it's our testing framework we're checking.
  */
-static void test_paranoia()
+static void test_paranoia(void)
 {
     assert(1);
     assert(sizeof(unsigned char) == 1);
@@ -28,7 +27,6 @@ static TestSuite basic_suite = {"Basic", NULL, NULL, basic_tests};
 static TestSuite *suites[] = {&basic_suite,
                               &bitmaps_suite,
                               &chaincode_suite,
-                              &fft_suite,
                               &editdist_suite,
                               NULL};
 
@@ -41,7 +39,7 @@ static int count_nonzero_pointers(void **array)
 }
 
 
-static int get_total_number_of_tests(TestSuite **suites)
+static int get_total_number_of_tests(void)
 {
     int i;
     int result = 0;
@@ -76,16 +74,16 @@ static void output_show(int position, int total_number)
     fflush(stdout);
 }
 
-static void output_finish()
+static void output_finish(void)
 {
     putchar('\n');
 }
 
 
-int main()
+int main(void)
 {
     int nsuites = count_nonzero_pointers((void **) suites);
-    int total_number_of_tests = get_total_number_of_tests(suites);
+    int total_number_of_tests = get_total_number_of_tests();
     int i;
     int counter = 0;
 
@@ -113,11 +111,11 @@ int main()
     return 0;
 }
 
-
-#endif
-
+#else
 
 /* Just a little export symbol to keep the compiler happy. */
 void dummy_function_testing()
 {
 }
+
+#endif

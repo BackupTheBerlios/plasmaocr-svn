@@ -305,6 +305,110 @@ void find_mass_center(unsigned char **pixels, int w, int h, int *m, int *cx, int
 }
 
 
+static int line_is_empty(unsigned char *a, int n)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        if (a[i])
+            return 0;
+
+    return 1;
+}
+
+static int column_is_empty(unsigned char **pixels, int height, int x)
+{
+    int i;
+    for (i = 0; i < height; i++)
+        if (pixels[i][x])
+            return 0;
+
+    return 1;
+}
+
+int tighten_to_bbox(unsigned char **pixels, int w,
+                    int *b_x, int *b_y, int *b_w, int *b_h)
+{
+    int i;
+    for (i = 0; i < *b_h; i++)
+        if (!line_is_empty(pixels[*b_y + i], *b_w))
+            break;
+
+    if (i == *b_h)
+    {
+        *b_w = 1;
+        *b_h = 1;
+        return 0;
+    }
+
+    *b_y += i;
+    *b_h -= i;
+
+    for (i = *b_h - 1; i; i--)
+        if (!line_is_empty(pixels[*b_y + i], *b_w))
+            break;
+
+    *b_h = i + 1;
+
+    for (i = 0; i < *b_w; i++)
+        if (!column_is_empty(pixels + *b_y, *b_h, *b_x + i))
+            break;
+
+    *b_x += i;
+    *b_w -= i;
+
+    for (i = *b_w - 1; i; i--)
+        if (!column_is_empty(pixels + *b_y, *b_h, *b_x + i))
+            break;
+
+    *b_w = i + 1;
+
+    return 1;
+}
+
+
+int find_bbox(unsigned char **pixels, int w, int h,
+              int *b_x, int *b_y, int *b_w, int *b_h)
+{
+    *b_x = 0;
+    *b_y = 0;
+    *b_w = w;
+    *b_h = h;
+
+    return tighten_to_bbox(pixels, w, b_x, b_y, b_w, b_h);
+}
+
+
+/* Returns true if *bbox should be FREE()'d afterwards. */
+/* In case the bbox is empty, return 1x1 white pixel. */
+int get_bbox_window(unsigned char **pixels, int w, int h,
+                    unsigned char ***bbox, int *b_w, int *b_h)
+{
+    int x, y;
+    int i;
+    
+    if (!find_bbox(pixels, w, h, &x, &y, b_w, b_h))
+    {
+        /* we've got an empty box! */
+        *bbox = pixels;
+        *b_w = 1;
+        *b_h = 1;
+        return 0;
+    }
+
+    if (!x)
+    {
+        /* no shift */
+        *bbox = pixels + y;
+        return 0;
+    }
+
+    *bbox = MALLOC(unsigned char *, *b_h);
+    for (i = 0; i < *b_h; i++)
+        (*bbox)[i] = pixels[i + y] + x;
+
+    return 1;
+}
+
 #ifdef TESTING
 
 /* Try writing into the pointer array and the bitmap.
@@ -342,7 +446,7 @@ static void test_bitmap_integrity(unsigned char **bitmap, int w, int h)
     }
 }
 
-static void allocate_bitmap_basic_test()
+static void allocate_bitmap_basic_test(void)
 {
     int w = 10;
     int h = 10;

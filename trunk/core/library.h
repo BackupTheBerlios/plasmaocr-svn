@@ -11,7 +11,7 @@ typedef struct LibraryStruct *Library;
 typedef struct
 {
     Pattern pattern;
-    char text[MAX_TEXT_SIZE]; // "" - unknown
+    char text[MAX_TEXT_SIZE]; /* "" - unknown */
     int radius;
     int left, top, width, height;
     int disabled;
@@ -25,7 +25,7 @@ typedef struct
     int allocated;
     unsigned char **pixels;
     int width, height;
-    int ownership; // if nonzero, `pixels' will be freed in the end
+    int ownership; /* if nonzero, `pixels' will be freed in the end */
     long offset_in_file;
 } Shelf;
 
@@ -33,7 +33,7 @@ typedef struct
 Shelf *shelf_create(Library);
 LibraryRecord *shelf_append(Shelf *);
 
-Library library_create();
+Library library_create(void);
 Library library_open(const char *path);
 void library_read_prototypes(Library);
 void library_discard_prototypes(Library);
@@ -41,6 +41,20 @@ void library_destroy(Library);
 void library_write(Library, const char *path);
 int library_shelves_count(Library);
 Shelf *library_get_shelf(Library, int i);
+
+
+typedef struct
+{
+    int libraries_count;
+    Library *libraries;
+    int current_library_index; /* -1 afterwards */
+    int current_shelf_index;
+    Shelf *current_shelf;
+    int current_record_index;
+} LibraryIterator;
+
+void library_iterator_init(LibraryIterator *, int nlibraries, Library *);
+LibraryRecord *library_iterator_next(LibraryIterator *);
 
 
 #endif

@@ -8,8 +8,8 @@
 typedef struct
 {
     int x, y;
-    int degree; // may be 2 (on cycles, a node is injected somewhere)
-    int *rope_indices; // the same rope may be here twice
+    int degree;        /* may be 2 (on cycles, a node is injected somewhere) */
+    int *rope_indices; /* the same rope may be here twice */
 } Node;
 
 
@@ -22,9 +22,9 @@ typedef struct
 
 typedef struct
 {
-    int length;     // in steps
+    int length;     /* in steps */
     char *steps;
-    int start, end; // node indices
+    int start, end; /* node indices */
 } Rope;
 
 
@@ -34,9 +34,9 @@ typedef struct
     Rope *ropes;
     int node_count;
     int rope_count;
-    int width;           // of the original picture
+    int width;           /* of the original picture */
     int height;
-    int node_allocated;  // in fact, these two fields should be hidden
+    int node_allocated;  /* in fact, these two fields should be hidden */
     int rope_allocated;
 } Chaincode;
 

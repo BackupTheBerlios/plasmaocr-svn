@@ -23,6 +23,10 @@
 /* Since Plasma is going into touch with many other projects,
  * I've decided not to write nor use any class for bitmaps.
  * It's always just (unsigned char **pixels, int w, int h).
+ *
+ * P.S. This decision has proved to be fortunate;
+ * but the implicit existence of two distinct bitmap classes
+ * (with and without margins) is *horrible*.
  */
 
 #ifndef PLASMA_OCR_BITMAP_H
@@ -82,6 +86,26 @@ void strip_endpoints_8(unsigned char **result, unsigned char **pixels, int w, in
 
 int find_mass(unsigned char **pixels, int w, int h);
 void find_mass_center(unsigned char **pixels, int w, int h, int *m, int *cx, int *cy, int quant);
+
+
+/* Tighten a rectangle to a bbox of its contents.
+ * Returns nonzero if the image is non-empty.
+ * (if it's empty, then b_w and b_h are set to 1)
+ */
+int tighten_to_bbox(unsigned char **pixels, int w,
+                    int *b_x, int *b_y, int *b_w, int *b_h);
+
+/* Find a bounding box. Returns nonzero if the image is non-empty.
+ */
+int find_bbox(unsigned char **pixels, int w, int h,
+              int *b_x, int *b_y, int *b_w, int *b_h);
+
+
+/* Returns true if *bbox should be FREE()'d afterwards.
+ * In case the bbox is empty, return 1x1 white pixel.
+ */
+int get_bbox_window(unsigned char **pixels, int w, int h,
+                    unsigned char ***bbox, int *b_w, int *b_h);
 
 FUNCTIONS_END
 

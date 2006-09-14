@@ -1,225 +1,70 @@
 #include "common.h"
+#include "core.h"
+#include "library.h"
 #include "chaincode.h"
 #include "editdist.h"
 #include "shiftcut.h"
-#include "core.h"
-#include "io.h"
-#include "pnm.h"
-#include "linewise.h"
+#include "wordcut.h"
+#include "pattern.h"
 #include <assert.h>
 #include <string.h>
 
 
-
-
-
-
-
-
-
-
-
-// _________________________________   library   ______________________________________
-
-typedef struct
+struct CoreStruct
 {
-    char *text;
-    char *path; // path to the PBM file this sample was in
-    int radius;
-    Pattern pattern;    
-} Sample;
-
-struct LibraryStruct
-{
-    int n;
-    int allocated;
-    Sample *samples;
+    int libraries_count, libraries_allocated;
+    Library *libraries;
+    int matches_count, matches_allocated;
+    Match *matches;
+    int records_count, records_allocated;
+    LibraryRecord **records;    
 };
 
+static void init_libraries_list(Core c)
+    LIST_CREATE(Library, c->libraries, c->libraries_count, c->libraries_allocated, 8)
 
-void load_raw_sample(Sample *s, const char *text, const char *path, int radius)
+static Library *append_library(Core c)
+    LIST_APPEND(Library, c->libraries, c->libraries_count, c->libraries_allocated)
+
+static void init_matches_list(Core c)
+    LIST_CREATE(Match, c->matches, c->matches_count, c->matches_allocated, 16)
+
+static Match *append_match(Core c)
+    LIST_APPEND(Match, c->matches, c->matches_count, c->matches_allocated)
+
+static void init_records_list(Core c)
+    LIST_CREATE(LibraryRecord *, c->records, c->records_count, c->records_allocated, 16)
+
+static LibraryRecord **append_record(Core c)
+    LIST_APPEND(LibraryRecord *, c->records, c->records_count, c->records_allocated)
+
+
+Core new_core()
 {
-    unsigned char **pixels;
-    int width, height;
-    s->text = strdup(text);
-    s->path = strdup(path);
-    s->radius = radius;
-    if (load_pnm(path, &pixels, &width, &height) != PBM)
-    {
-        perror(path);
-        exit(1);
-    }
+    Core c = MALLOC1(struct CoreStruct);
+    init_libraries_list(c);
+    init_matches_list(c);
+    init_records_list(c);
+    return c;
+}
     
-    s->pattern = core_prepare(pixels, width, height);
-    core_promote(s->pattern);
+void free_core(Core c)
+{
+    FREE(c->libraries);
+    FREE(c->matches);
+    FREE(c->records);
+    FREE1(c);
+}
+
+void add_to_core(Core c, Library l)
+{
+    *(append_library(c)) = l;
 }
 
 
-void load_sample_by_line(Sample *s, const char *line)
-{
-    int n = strlen(line) + 1;
-    char text[n];
-    char path[n];
-    int radius;
-    if (sscanf(line, "%s %d %s", text, &radius, path) != 3)
-    {
-        fprintf(stderr, "Invalid line: %s\n", line);
-        exit(1);
-    }
-    load_raw_sample(s, text, path, radius);
-}
-
-
-static int is_comment_line(const char *line)
-{
-    while (1) switch(*line)
-    {
-        case '\0': case '#':
-            return 1;
-        case ' ': case '\t': case '\r': case '\n': case '\f':
-            line++;
-        break;
-        default:
-            return 0;
-    }
-}
-
-static Sample *append_to_library(Library l)
-    LIST_APPEND(Sample, l->samples, l->n, l->allocated)
-
-Library core_load_raw_library(const char *path)
-{
-    FILE *f = fopen(path, "r");
-    LinewiseReader r;
-    Library l;
-    const char *line;
-    if (!f)
-    {
-        perror(path);
-        exit(1);
-    }
-
-    r = linewise_reader_create(f);
-    l = MALLOC1(struct LibraryStruct);
-    l->n = 0;
-    l->allocated = 10;
-    l->samples = MALLOC(Sample, l->allocated);
-    
-    while ((line = linewise_read_and_chomp(r)))
-    {
-        if (is_comment_line(line)) continue;
-        load_sample_by_line(append_to_library(l), line);
-    }
-    
-    l->samples = REALLOC(Sample, l->samples, l->n);
-    return l;
-}
-
-
-static void save_sample(Sample *s, FILE *f)
-{
-    int t = strlen(s->text);
-    int p = strlen(s->path);
-    write_int32(t, f);
-    write_int32(p, f);
-    fwrite(s->text, 1, t, f);
-    fwrite(s->path, 1, p, f);
-    write_int32(s->radius, f);
-    core_save_pattern(s->pattern, f);
-}
-
-
-static int load_sample(Sample *s, FILE *f)
-{
-    int t = read_int32(f);
-    int p = read_int32(f);
-    if (feof(f)) return 0;
-    if (t < 0 || t > 10000 || p < 0 || p > 10000)
-    {
-        fprintf(stderr, "load_sample()> corrupted library\n");
-        exit(1);
-    }
-    s->text = MALLOC(char, t + 1);
-    s->path = MALLOC(char, p + 1);
-    fread(s->text, 1, t, f);
-    fread(s->path, 1, p, f);
-    s->text[t] = s->path[p] = '\0';
-    s->radius = read_int32(f);
-    s->pattern = core_load_pattern(f);
-    assert(s->pattern);
-    core_promote(s->pattern);
-    return 1;
-}
-
-
-Library core_load_library(const char *path)
-{
-    FILE *f = fopen(path, "rb");
-    Library l = MALLOC1(struct LibraryStruct);
-    
-    if (!f)
-    {
-        perror(path);
-        exit(1);
-    }
-    
-    l->n = 0;//read_int32(f);
-    l->allocated = 10;
-    l->samples = MALLOC(Sample, l->allocated);
-    
-    while(1)
-    {
-        if (!load_sample(append_to_library(l), f))
-        {
-            l->n--; // last append was false
-            break;
-        }
-        assert(l->samples[l->n - 1].pattern);
-    }
-    
-    fclose(f);
-    return l;
-}
-
-void core_save_library(Library l, const char *path)
-{
-    FILE *f = fopen(path, "wb");
-    int i;
-
-    if (!f)
-    {
-        perror(path);
-        exit(1);
-    }
-
-    //write_int32(l->n, f);
-
-    for (i = 0; i < l->n; i++)
-        save_sample(&l->samples[i], f);
-    
-    fclose(f);
-}
-
-void core_destroy_library(Library l)
-{
-    int i;
-    for (i = 0; i < l->n; i++)
-    {
-        FREE(l->samples[i].text);
-        FREE(l->samples[i].path);
-        core_destroy_pattern(l->samples[i].pattern);
-    }
-
-    if (l->samples)
-        FREE(l->samples);
-    
-    FREE1(l);
-}
-
-
-// ____________________________   recognition   ____________________________
-
-static int samples_conflict(Sample **s, int n)
+/* Return 0 if all the library samples read the same.
+ */
+static int samples_conflict(LibraryRecord **s, int n)
 {
     int i;
     assert(n > 0);
@@ -233,85 +78,99 @@ static int samples_conflict(Sample **s, int n)
 }
 
 
-static Opinion *create_opinion(const char *text, ColorCode c)
+static RecognizedLetter *create_recognized_letter(char *text, ColorCode c)
 {
-    Opinion *result = MALLOC1(Opinion);
+    RecognizedLetter *result = MALLOC1(RecognizedLetter);
     result->text = text;
     result->color = c;
+    result->best_match = NULL;
     return result;
 }
 
 
-static char *fingerprint_recognize(Library l, Pattern p)
+static void iterate_core(Core c, LibraryIterator *iter)
 {
-    char *best = NULL;
-    long best_dist = 0x7FFFFFFFL;
-    int i;
-
-    for (i = 0; i < l->n; i++)
-    {
-        int a = l->samples[i].pattern->cc->width  * p->cc->height;
-        int b = l->samples[i].pattern->cc->height * p->cc->width;
-        if (a > MAX_SIZE_DIFF_COEF * b || b > MAX_SIZE_DIFF_COEF * a)
-            continue;
-
-        long dist = fingerprint_distance_squared(l->samples[i].pattern->fingerprint, p->fingerprint);
-        if (dist < best_dist)
-        {
-            best_dist = dist;
-            best = l->samples[i].text;
-        }
-    }
-
-    return best;
+    library_iterator_init(iter, c->libraries_count, c->libraries);
 }
 
 
-Opinion *core_recognize_letter(Library l, int no_blacks, unsigned char **pixels, int width, int height)
+static RecognizedLetter *shiftcut_recognize(Core c, Pattern p, int need_explanation)
 {
-    Pattern p = core_prepare(pixels, width, height);
+    char *best = NULL;
+    long best_dist = 0x7FFFFFFFL;
+    LibraryIterator best_iter;
+    LibraryIterator iter;
+    LibraryRecord *rec;
+    RecognizedLetter *result;
 
-    // First, match to everything
-    Match *matches = MALLOC(Match, l->n);
-    Sample **samples = MALLOC(Sample *, l->n);
-    int matches_found = 0;
-    int i;
-    Opinion *opinion;
+    iterate_core(c, &iter);
 
-    assert(l->n > 0);
-
-    for (i = 0; i < l->n; i++)
+    while ((rec = library_iterator_next(&iter)))
     {
-        assert(l->samples[i].pattern);
-        Match m = core_match(l->samples[i].pattern, p);
-        if (m)
+        long dist = patterns_shiftcut_dist(rec->pattern, p);
+        
+        if (dist < best_dist)
         {
-            matches[matches_found] = m;
-            samples[matches_found] = &l->samples[i];
-            matches_found++;
+            best_dist = dist;
+            best = rec->text;
+            best_iter = iter;
         }
     }
 
-    if (!matches_found)
-        opinion = create_opinion(NULL, CC_RED);
-    else if (!no_blacks && !samples_conflict(samples, matches_found))
-        opinion = create_opinion(samples[0]->text, CC_BLACK);
+    result = create_recognized_letter(best, (best ? CC_YELLOW : CC_RED));
+    
+    if (need_explanation)
+    {
+        result->best_match = MALLOC1(LibraryIterator);
+        *(result->best_match) = best_iter;
+    }
+
+    return result;
+}
+
+
+RecognizedLetter *recognize_pattern(Core c, Pattern p, int need_explanation)
+{
+    /* First, match to everything */
+
+    int i;
+    LibraryRecord *rec;
+    LibraryIterator iter;
+    RecognizedLetter *result;
+    
+    c->matches_count = 0;
+    c->records_count = 0;
+    iterate_core(c, &iter);
+
+    while ((rec = library_iterator_next(&iter)))
+    {
+        Match m = match_patterns(rec->pattern, p);
+        assert(rec->pattern);
+        if (m)
+        {
+            * (append_match(c)) = m;
+            * (append_record(c)) = rec;
+        }
+    }
+
+    if (!c->matches_count)
+        result = create_recognized_letter(NULL, CC_RED);
     else
     {
-        Match *good_matches = MALLOC(Match, matches_found);
-        Sample **good_samples = MALLOC(Sample *, matches_found);
+        Match *good_matches = MALLOC(Match, c->matches_count);
+        LibraryRecord **good_samples = MALLOC(LibraryRecord *, c->matches_count);
         int good_matches_found = 0;
         int best_match = -1;
         int best_penalty = -1;
         int penalty;
         
-        // Another pass over matches, this time with ED-comparison
-        for (i = 0; i < matches_found; i++)
+        /* Another pass over matches, this time with ED-comparison */
+        for (i = 0; i < c->matches_count; i++)
         {
-            if (core_compare(samples[i]->radius, matches[i], samples[i]->pattern, p, &penalty))
+            if (compare_patterns(c->records[i]->radius, c->matches[i], c->records[i]->pattern, p, &penalty))
             {
-                good_matches[good_matches_found] = matches[i];
-                good_samples[good_matches_found] = samples[i];
+                good_matches[good_matches_found] = c->matches[i];
+                good_samples[good_matches_found] = c->records[i];
                 good_matches_found++;
             }
 
@@ -323,39 +182,118 @@ Opinion *core_recognize_letter(Library l, int no_blacks, unsigned char **pixels,
         }
 
         if (!good_matches_found)
-            opinion = create_opinion(samples[best_match]->text, CC_YELLOW);
+            result = create_recognized_letter(c->records[best_match]->text, CC_YELLOW);
         else if (samples_conflict(good_samples, good_matches_found))
-            opinion = create_opinion(samples[best_match]->text, CC_BLUE);
+            result = create_recognized_letter(c->records[best_match]->text, CC_BLUE);
         else
-            opinion = create_opinion(good_samples[0]->text, CC_GREEN);
+            result = create_recognized_letter(good_samples[0]->text, CC_GREEN);
 
         FREE(good_matches);
         FREE(good_samples);
     }
     
-    if (opinion->color == CC_RED || opinion->color == CC_YELLOW)
+    if (result->color == CC_RED || result->color == CC_YELLOW)
     {
-        char *alternative = fingerprint_recognize(l, p);
+        RecognizedLetter *alternative = shiftcut_recognize(c, p, need_explanation);
+        if (result)
+            free_recognized_letter(result);
 
-        if (!alternative)
-            opinion->color = CC_RED;     
-        else if (opinion->color == CC_YELLOW && alternative && !strcmp(alternative, opinion->text))
-            opinion->color = CC_MAGENTA;
-        
-        opinion->text = alternative;
+        result = alternative;
     }
 
-    core_destroy_pattern(p);
-    for (i = 0; i < matches_found; i++)
-        core_destroy_match(matches[i]);
+    for (i = 0; i < c->matches_count; i++)
+        destroy_match(c->matches[i]);
     
-    FREE(samples);    
-    FREE(matches);
-    return opinion;
+    return result;
 }
 
 
-void core_destroy_opinion(Opinion *op)
+
+RecognizedLetter *recognize_letter(Core c,
+                                   unsigned char **pixels, int width, int height,
+                                   int need_explanation)
 {
-    FREE1(op);
+    Pattern p = create_pattern(pixels, width, height);
+    RecognizedLetter *result = recognize_pattern(c, p, need_explanation);
+    destroy_pattern(p);
+    return result;
+}
+
+
+void free_recognized_letter(RecognizedLetter *r)
+{
+    if (r->text) FREE(r->text);
+    if (r->best_match) FREE(r->best_match);
+    FREE1(r);
+}
+
+    
+static void build_recognized_word_text(RecognizedWord *rw)
+{
+    int s = 0;
+    int i;
+
+    for (i = 0; i < rw->count; i++)
+        s += strlen(rw->letters[i]->text);
+
+    rw->text = MALLOC(char, s + 1);
+    
+    s = 0;
+    for (i = 0; i < rw->count; i++)
+    {
+        strcpy(rw->text + s, rw->letters[i]->text);
+        s += strlen(rw->letters[i]->text);
+    }
+}
+
+
+RecognizedWord *recognize_word(Core c,
+                               unsigned char **pixels, int width, int height,
+                               int need_explanation)
+{
+    PatternCache pc = create_pattern_cache(pixels, width, height);
+    WordCut *wc = cut_word(pixels, width, height);
+    int count = wc->count + 1;  /* the number of chunks is number of cuts + 1 */
+    int i;
+    unsigned char **window = MALLOC(unsigned char *, height);
+    RecognizedWord *rw = MALLOC1(RecognizedWord);
+    rw->count = count;
+    rw->letters = MALLOC(RecognizedLetter *, count);
+    
+    for (i = 0; i < count; i++)
+    {
+        int x_beg, x_end, j;
+        if (i)
+            x_beg = wc->position[i-1];
+        else
+            x_beg = 0;
+
+        if (i != count - 1)
+            x_end = wc->position[i];
+        else
+            x_end = width;
+
+        for (j = 0; j < height; j++)
+            window[j] = pixels[j] + x_beg;
+
+        rw->letters[i] = recognize_letter
+            (c, window, x_end - x_beg, height, need_explanation);
+    }
+            
+    build_recognized_word_text(rw);
+    destroy_word_cut(wc);
+    destroy_pattern_cache(pc);
+    FREE(window);
+    
+    return rw;
+}
+
+void free_recognized_word(RecognizedWord *rw)
+{
+    int i;
+    for (i = 0; i < rw->count; i++)
+        free_recognized_letter(rw->letters[i]);
+    
+    FREE(rw->text);
+    FREE1(rw);
 }

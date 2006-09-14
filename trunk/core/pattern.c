@@ -88,12 +88,20 @@ static Pattern chaincode_to_pattern_scaled(Chaincode *cc)
 }
 
 
-Pattern create_pattern(unsigned char **pixels, int w, int h)
+Pattern create_pattern(unsigned char **pixels, int width, int height)
 {
-    Chaincode *cc = chaincode_compute(pixels, w, h);
+    unsigned char **window;
+    int w, h;
+    int free_window = get_bbox_window(pixels, width, height, &window, &w, &h); 
+    
+    Chaincode *cc = chaincode_compute(window, w, h);
     Pattern p = chaincode_to_pattern_scaled(cc);
     chaincode_destroy(cc);
     get_fingerprint_bw(pixels, w, h, &p->fingerprint);
+    
+    if (free_window)
+        FREE(window);
+
     return p;
 }
 
@@ -113,10 +121,10 @@ void destroy_pattern_cache(PatternCache p)
 
 
 Pattern create_pattern_from_cache(unsigned char **pixels, int width, int height,
-                                       int left, int top, int p_w, int p_h,
-                                       PatternCache pc)
+                                  int left, int top, int p_w, int p_h,
+                                  PatternCache pc)
 {
-    unsigned char **buffer = allocate_bitmap_with_white_margins(p_w, p_h);
+    unsigned char **buffer;
     Chaincode *cc;
     int i;
     Pattern p;
@@ -127,6 +135,9 @@ Pattern create_pattern_from_cache(unsigned char **pixels, int width, int height,
     assert(top >= 0);
     assert(left + p_w <= width);
     assert(top  + p_h <= height);
+
+    tighten_to_bbox(pixels, width, &left, &top, &p_w, &p_h);
+    buffer = allocate_bitmap_with_white_margins(p_w, p_h);
 
     assign_bitmap_with_offsets(buffer, pc->framework + top, p_w, p_h, 0, left);
     cc = chaincode_compute_internal(buffer, p_w, p_h);
@@ -158,7 +169,7 @@ void save_pattern(Pattern p, FILE *f)
 }
 
 
-char *reverse_rope(Rope *rope)
+static char *reverse_rope(Rope *rope)
 {
     int i;
     char *result;
@@ -184,16 +195,17 @@ void promote_pattern(Pattern p)
     if (!p) return;
     if (p->ropes_backwards) return;
 
-    // reverse all ropes
+    /* reverse all ropes */
     p->ropes_backwards = MALLOC(char *, r);
     for (i = 0; i < r; i++)
         p->ropes_backwards[i] = reverse_rope(&ropes[i]);
 }
 
 
-// Returns the index of the nearest point to (x,y).
-// n > 0
-// Bug: doesn't work well with big numbers.
+/* Returns the index of the nearest point to (x,y).
+ * n > 0
+ * Bug: doesn't work well with big numbers.
+ */
 static int nearest_point(int n, int *xs, int *ys, int x, int y)
 {
     int best = -1;
@@ -216,7 +228,7 @@ static int nearest_point(int n, int *xs, int *ys, int x, int y)
 }
 
 
-// Match two clouds of points.
+/* Match two clouds of points. */
 static int *match_clouds(int n, int *x1, int *y1, int *x2, int *y2)
 {
     int i, j;
@@ -231,7 +243,7 @@ static int *match_clouds(int n, int *x1, int *y1, int *x2, int *y2)
     {
         int best = nearest_point(n, x2, y2, x1[i], y1[i]);
         
-        // check that the match is unique
+        /* check that the match is unique */
         for (j = 0; j < i; j++)
         {
             if (result[j] == best)
@@ -265,8 +277,8 @@ Match match_patterns(Pattern p1, Pattern p2)
     assert(p1->ropes_backwards || p2->ropes_backwards);
     if (!p1->ropes_backwards)
     {
-        swap = 1;
         Pattern tmp = p1;
+        swap = 1;
         p1 = p2;
         p2 = tmp;        
     }
@@ -307,7 +319,7 @@ int compare_patterns(int radius, Match m, Pattern p1, Pattern p2, int *penalty)
     node_mapping = m->node_mapping;
     rope_mapping = m->rope_mapping;
 
-    if (m->swap) // p1 should be promoted
+    if (m->swap) /* p1 should be promoted */
     {
         Pattern tmp = p1;
         p1 = p2;
@@ -318,7 +330,7 @@ int compare_patterns(int radius, Match m, Pattern p1, Pattern p2, int *penalty)
 
     if (penalty) *penalty = 0;
     
-    // Now pass all the ropes, applying editing distance
+    /* Now pass all the ropes, applying editing distance */
     for (i = 0; i < r; i++)
     {
         Rope *r1 = &p1->cc->ropes[i];
@@ -384,4 +396,19 @@ void destroy_pattern(Pattern p)
     if (p->rope_medians_x) FREE(p->rope_medians_x);
     if (p->rope_medians_y) FREE(p->rope_medians_y);
     FREE1(p);
+}
+
+int pattern_size_test(Pattern p1, Pattern p2)
+{
+    int a = p1->cc->width  * p2->cc->height;
+    int b = p2->cc->height * p1->cc->width;
+    return !(a > MAX_SIZE_DIFF_COEF * b || b > MAX_SIZE_DIFF_COEF * a);
+}
+
+long patterns_shiftcut_dist(Pattern p1, Pattern p2)
+{
+    if (!pattern_size_test(p1, p2))
+        return 0x7FFFFFFFL;
+
+    return fingerprint_distance_squared(p1->fingerprint, p2->fingerprint);
 }

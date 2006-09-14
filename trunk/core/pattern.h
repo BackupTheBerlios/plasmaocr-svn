@@ -31,7 +31,9 @@ typedef struct MatchStruct *Match;
 void promote_pattern(Pattern);
 Match match_patterns(Pattern p1, Pattern p2);
 int compare_patterns(int radius, Match m, Pattern p1, Pattern p2, int *penalty);
+long patterns_shiftcut_dist(Pattern p1, Pattern p2);
 void destroy_match(Match);
 
+int pattern_size_test(Pattern p1, Pattern p2);
 
 #endif
