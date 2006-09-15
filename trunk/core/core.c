@@ -4,6 +4,7 @@
 #include "chaincode.h"
 #include "editdist.h"
 #include "shiftcut.h"
+#include "bitmaps.h"
 #include "wordcut.h"
 #include "pattern.h"
 #include <assert.h>
@@ -17,7 +18,9 @@ struct CoreStruct
     int matches_count, matches_allocated;
     Match *matches;
     int records_count, records_allocated;
-    LibraryRecord **records;    
+    LibraryRecord **records;   
+    int orange_policy;
+    Library orange_library;
 };
 
 static void init_libraries_list(Core c)
@@ -39,12 +42,27 @@ static LibraryRecord **append_record(Core c)
     LIST_APPEND(LibraryRecord *, c->records, c->records_count, c->records_allocated)
 
 
-Core new_core()
+void set_core_orange_policy(Core c, int level)
+{
+    c->orange_policy = level;
+    if (level)
+        c->orange_library = library_create();
+}
+
+Library get_core_orange_library(Core c)
+{
+    return c->orange_library;
+}
+
+    
+Core create_core()
 {
     Core c = MALLOC1(struct CoreStruct);
     init_libraries_list(c);
     init_matches_list(c);
     init_records_list(c);
+    c->orange_policy = 0;
+    c->orange_library = NULL;
     return c;
 }
     
@@ -215,7 +233,32 @@ RecognizedLetter *recognize_letter(Core c,
 {
     Pattern p = create_pattern(pixels, width, height);
     RecognizedLetter *result = recognize_pattern(c, p, need_explanation);
-    destroy_pattern(p);
+    int cc = result->color;
+    if (c->orange_policy && (cc == CC_RED || cc == CC_YELLOW))
+    {
+        Shelf *s = shelf_create(c->orange_library);
+        LibraryRecord *rec = shelf_append(s);
+
+        s->pixels = copy_bitmap(pixels, width, height);
+        s->width = width;
+        s->height = height;
+        s->ownership = 1;
+
+        rec->pattern = p;
+        if (result->text)
+            strncpy(rec->text, result->text, MAX_TEXT_SIZE);
+        else
+            rec->text[0] = '\0';
+        rec->radius = DEFAULT_RADIUS;
+        rec->left = 0;
+        rec->top = 0;
+        rec->width = width;
+        rec->height = height;
+    }
+    else
+    {
+        destroy_pattern(p);
+    }
     return result;
 }
 
@@ -234,16 +277,22 @@ static void build_recognized_word_text(RecognizedWord *rw)
     int i;
 
     for (i = 0; i < rw->count; i++)
-        s += strlen(rw->letters[i]->text);
+        if (rw->letters[i]->text)
+            s += strlen(rw->letters[i]->text);
 
     rw->text = MALLOC(char, s + 1);
     
     s = 0;
     for (i = 0; i < rw->count; i++)
     {
-        strcpy(rw->text + s, rw->letters[i]->text);
-        s += strlen(rw->letters[i]->text);
+        if (rw->letters[i]->text)
+        {
+            strcpy(rw->text + s, rw->letters[i]->text);
+            s += strlen(rw->letters[i]->text);
+        }
     }
+
+    rw->text[s] = '\0';
 }
 
 
@@ -252,17 +301,19 @@ RecognizedWord *recognize_word(Core c,
                                int need_explanation)
 {
     PatternCache pc = create_pattern_cache(pixels, width, height);
+    Pattern p;
+    Shelf *s = NULL;
     WordCut *wc = cut_word(pixels, width, height);
     int count = wc->count + 1;  /* the number of chunks is number of cuts + 1 */
     int i;
-    unsigned char **window = MALLOC(unsigned char *, height);
     RecognizedWord *rw = MALLOC1(RecognizedWord);
     rw->count = count;
     rw->letters = MALLOC(RecognizedLetter *, count);
     
     for (i = 0; i < count; i++)
     {
-        int x_beg, x_end, j;
+        int x_beg, x_end;
+        ColorCode cc;
         if (i)
             x_beg = wc->position[i-1];
         else
@@ -273,17 +324,47 @@ RecognizedWord *recognize_word(Core c,
         else
             x_end = width;
 
-        for (j = 0; j < height; j++)
-            window[j] = pixels[j] + x_beg;
+        p = create_pattern_from_cache(pixels, width, height,
+                                      x_beg, 0, x_end - x_beg, height, pc);
+        
+        rw->letters[i] = recognize_pattern(c, p, need_explanation);
 
-        rw->letters[i] = recognize_letter
-            (c, window, x_end - x_beg, height, need_explanation);
+        /* XXX too much code duplicated with recognize_letter */
+        cc = rw->letters[i]->color;
+        if (c->orange_policy && (cc == CC_RED || cc == CC_YELLOW))
+        {
+            LibraryRecord *rec;
+            if (!s)
+            {
+                s = shelf_create(c->orange_library);
+                s->pixels = copy_bitmap(pixels, width, height);
+                s->width = width;
+                s->height = height;
+                s->ownership = 1;
+            }
+            
+            rec = shelf_append(s);
+
+            rec->pattern = p;
+            if (rw->letters[i]->text)
+                strncpy(rec->text, rw->letters[i]->text, MAX_TEXT_SIZE);
+            else
+                rec->text[0] = '\0';
+            rec->radius = DEFAULT_RADIUS;
+            rec->left = x_beg;
+            rec->top = 0;
+            rec->width = x_end - x_beg;
+            rec->height = height;
+        }
+        else
+        {
+            destroy_pattern(p);
+        }
     }
             
     build_recognized_word_text(rw);
     destroy_word_cut(wc);
     destroy_pattern_cache(pc);
-    FREE(window);
     
     return rw;
 }

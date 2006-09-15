@@ -7,17 +7,18 @@
 
 typedef struct CoreStruct *Core;
 
-Core new_core(void);
+Core create_core(void);
 void free_core(Core);
 void add_to_core(Core, Library l);
-
+void set_core_orange_policy(Core, int level);
+Library get_core_orange_library(Core);
 
 typedef enum
 {
     CC_RED,     /* what was that? */
     CC_GREEN,   /* certainly */
-    CC_YELLOW,  /* only a guess */
-    CC_BLUE     /* more than one "certain" match */
+    CC_YELLOW,  /* just a guess */
+    CC_BLUE     /* more than one "certain" match (which is strange) */
 } ColorCode;
 
 

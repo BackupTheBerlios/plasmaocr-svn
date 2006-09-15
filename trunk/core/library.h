@@ -1,7 +1,7 @@
 #ifndef PLASMA_OCR_LIBRARY_H
 #define PLASMA_OCR_LIBRARY_H
 
-
+#define DEFAULT_RADIUS 50
 #define MAX_TEXT_SIZE 20
 
 #include "pattern.h"
@@ -47,7 +47,7 @@ typedef struct
 {
     int libraries_count;
     Library *libraries;
-    int current_library_index; /* -1 afterwards */
+    int current_library_index;
     int current_shelf_index;
     Shelf *current_shelf;
     int current_record_index;

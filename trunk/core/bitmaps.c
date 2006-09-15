@@ -4,6 +4,20 @@
 #include <stdio.h>
 
 
+unsigned char **subbitmap(unsigned char **pixels, int x, int y, int h)
+{
+    unsigned char **result = MALLOC(unsigned char *, h);
+    int i;
+    
+    for (i = 0; i < h; i++)
+    {
+        result[i] = pixels[i + y] + x;
+    }
+
+    return result;
+}
+
+
 unsigned char **allocate_bitmap(int w, int h)
 {
     unsigned char *data, **result;

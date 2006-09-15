@@ -107,6 +107,8 @@ int find_bbox(unsigned char **pixels, int w, int h,
 int get_bbox_window(unsigned char **pixels, int w, int h,
                     unsigned char ***bbox, int *b_w, int *b_h);
 
+unsigned char **subbitmap(unsigned char **pixels, int x, int y, int h);
+
 FUNCTIONS_END
 
 #ifdef TESTING

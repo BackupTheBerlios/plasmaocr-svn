@@ -5,6 +5,7 @@
 #include "thinning.h"
 #include "bitmaps.h"
 #include "editdist.h"
+#include <assert.h>
 
 #define MAX_SIZE_DIFF_COEF 1.3
 #define COMMON_HALF_PERIMETER 32

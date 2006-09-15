@@ -1,7 +1,9 @@
 #include "common.h"
 #include "library.h"
 #include "io.h"
+#include "bitmaps.h"
 #include "rle.h"
+#include <assert.h>
 
 
 void library_iterator_init(LibraryIterator *li, int n, Library *libs)
@@ -22,7 +24,7 @@ void library_iterator_init(LibraryIterator *li, int n, Library *libs)
 LibraryRecord *library_iterator_next(LibraryIterator *li)
 {
     Library l;
-    if (li->current_library_index == -1)
+    if (li->current_library_index >= li->libraries_count)
         return NULL;
     
     l = li->libraries[li->current_library_index];
@@ -42,7 +44,7 @@ LibraryRecord *library_iterator_next(LibraryIterator *li)
             if (li->current_library_index == li->libraries_count)
             {
                 /* finish */
-                li->current_library_index = -1;
+                li->current_library_index = li->libraries_count;
                 return NULL;
             }
         }
@@ -239,6 +241,31 @@ void library_read_prototypes(Library l)
     }
     fclose(l->file);
     l->file = NULL;
+}
+
+
+static void shelf_destroy(Shelf *s)
+{
+    int i;
+    if (s->ownership)
+        free_bitmap(s->pixels);
+
+    for (i = 0; i < s->count; i++)
+        destroy_pattern(s->records[i].pattern);
+
+    FREE(s->records);
+}
+
+
+void library_destroy(Library l)
+{
+    int i;
+    if (l->file)
+        fclose(l->file);
+    for (i = 0; i < l->count; i++)
+        shelf_destroy(&l->shelves[i]);
+    FREE(l->shelves);
+    FREE1(l);
 }
 
 

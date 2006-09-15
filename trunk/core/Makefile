@@ -1,8 +1,8 @@
 TARGET=core_test
 SOURCES:=$(wildcard *.c)
 CFLAGS:=-pipe -g -Wmissing-prototypes -Wall
-CC=g++
-LINK=g++
+CC=gcc
+LINK=gcc
 OBJDIR:=obj
 
 #set to `y' for some mad ANSI C compatibility options
