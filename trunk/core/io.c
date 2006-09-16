@@ -39,7 +39,20 @@ FILE *checked_fopen(const char *path, const char *mode)
             return stdout;
     }
     
-    f = fopen(path, mode);
+    if (*mode == '+')
+    {
+        char buf[5];
+        sprintf(buf, "r%2s", mode);
+        f = fopen(path, buf);
+        if (!f)
+        {
+            sprintf(buf, "w%2s", mode);
+            f = fopen(path, buf);
+        }
+    }
+    else    
+        f = fopen(path, mode);
+    
     if (!f)
     {
         perror(path);

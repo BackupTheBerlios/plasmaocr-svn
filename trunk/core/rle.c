@@ -21,12 +21,12 @@ void rle_encode_raw(FILE *f, unsigned char *pixels, int n)
         int wrun = 0, brun = 0;
         
         /* gather white run */
-        while (!pixels[i] && i < n && wrun < MAX_WHITE_RUN)
+        while (i < n && !pixels[i] && wrun < MAX_WHITE_RUN)
         {
             i++;
             wrun++;
         }
-        while (pixels[i] && i < n && brun < MAX_BLACK_RUN)
+        while (i < n && pixels[i] && brun < MAX_BLACK_RUN)
         {
             i++;
             brun++;
@@ -68,6 +68,8 @@ void rle_encode_FILE(FILE *f, unsigned char **pixels, int w, int h)
     unsigned char *buf = MALLOC(unsigned char, w * h);
     int i;
 
+    assert(w && h);
+    
     for (i = 0; i < h; i++)
         memcpy(buf + i * w, pixels[i], w);
     

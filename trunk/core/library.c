@@ -83,7 +83,7 @@ static Shelf *library_append_shelf(Library l)
  *
  *  - pattern (see pattern.h)
  *  - radius (4 bytes)
- *  - text (1 to MAX_TEXT_SIZE bytes, zero-trailed unless MAX_TEXT_SIZE long)
+ *  - text (1 to MAX_TEXT_SIZE bytes, zero-trailed)
  * 
  * Note that the box (left, top, width, height) is not stored,
  * because it's irrelevant for a batch run.
@@ -180,8 +180,9 @@ static void shelf_save_prototype(Shelf *s, FILE *f)
 
 static void save_shelf(Shelf *s, FILE *f)
 {
-    long pos1, pos2, pos3;
+    long pos0, pos1, pos2, pos3;
     int i;
+    pos0 = ftell(f);
     write_int32(0, f); /* to be overwritten later */
     write_int32(0, f); /* to be overwritten later */
     pos1 = ftell(f);
@@ -191,7 +192,7 @@ static void save_shelf(Shelf *s, FILE *f)
     for (i = 0; i < s->count; i++)
         save_record(&s->records[i], f);    
     pos3 = ftell(f);
-    fseek(f, pos1, SEEK_SET);
+    fseek(f, pos0, SEEK_SET);
     write_int32(pos2 - pos1, f);
     write_int32(pos3 - pos2, f);
     fseek(f, pos3, SEEK_SET);
@@ -287,27 +288,28 @@ void library_discard_prototypes(Library l)
 }
 
 
-void library_save(Library l, const char *path)
+void library_save(Library l, const char *path, int append)
 {
-    FILE *f = fopen(path, "wb");
+    /* +b is a special case handled by checked_fopen():
+     * it's like r+b, but if file doesn't exist, it's created.
+     */
+    FILE *f = checked_fopen(path, append ? "+b" : "wb");
     int i;
     assert(!l->file);
-    
-    if (!f)
-    {
-        perror(path);
-        exit(1);
-    }
-    
+
+    if (append)
+        fseek(f, 0, SEEK_END);
+        
     for (i = 0; i < l->count; i++)
         save_shelf(&l->shelves[i], f);
 
-    fclose(f);
+    checked_fclose(f);
 }
 
 
 int library_shelves_count(Library l)
 {
+    assert(l);
     return l->count;
 }
 

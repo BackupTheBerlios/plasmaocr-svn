@@ -355,8 +355,10 @@ int tighten_to_bbox(unsigned char **pixels, int w,
                     int *b_x, int *b_y, int *b_w, int *b_h)
 {
     int i;
+    assert(*b_w > 0 && *b_h > 0);
+ 
     for (i = 0; i < *b_h; i++)
-        if (!line_is_empty(pixels[*b_y + i], *b_w))
+        if (!line_is_empty(pixels[*b_y + i] + *b_x, *b_w))
             break;
 
     if (i == *b_h)
@@ -370,7 +372,7 @@ int tighten_to_bbox(unsigned char **pixels, int w,
     *b_h -= i;
 
     for (i = *b_h - 1; i; i--)
-        if (!line_is_empty(pixels[*b_y + i], *b_w))
+        if (!line_is_empty(pixels[*b_y + i] + *b_x, *b_w))
             break;
 
     *b_h = i + 1;
@@ -379,6 +381,8 @@ int tighten_to_bbox(unsigned char **pixels, int w,
         if (!column_is_empty(pixels + *b_y, *b_h, *b_x + i))
             break;
 
+    assert(i != *b_w);
+    
     *b_x += i;
     *b_w -= i;
 
@@ -388,6 +392,9 @@ int tighten_to_bbox(unsigned char **pixels, int w,
 
     *b_w = i + 1;
 
+    assert(*b_w > 0);
+    assert(*b_h > 0);
+    
     return 1;
 }
 

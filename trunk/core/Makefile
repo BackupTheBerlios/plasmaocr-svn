@@ -1,9 +1,23 @@
-TARGET=coldplasma#core_test
-SOURCES:=$(wildcard *.c)
-CFLAGS:=-pipe -g -Wmissing-prototypes -Wall #-DTESTING
+LIBSRC:=bitmaps.c \
+	chaincode.c \
+	core.c \
+	editdist.c \
+	io.c \
+	library.c \
+	pattern.c \
+	pnm.c \
+	rle.c \
+	shiftcut.c \
+	testing.c \
+	thinning.c \
+	wordcut.c
+
+CFLAGS:=-pipe -g -Wmissing-prototypes -Wall
 CC=gcc
 LINK=gcc
-OBJDIR:=obj
+BASEOBJDIR:=obj
+OBJDIR:=$(BASEOBJDIR)/nontest
+TESTDIR:=$(BASEOBJDIR)/test
 
 #set to `y' for some mad ANSI C compatibility options
 MANIAC:=n
@@ -12,43 +26,67 @@ MANIAC:=n
 
 DEPGEN:=-MMD
 MANIACFLAGS:= \
-       -Wall -Werror -Wshadow -pedantic-errors \
+       -Wall -Wshadow -pedantic-errors \
        -Wpointer-arith -Waggregate-return \
        -Wstrict-prototypes -Wmissing-declarations \
        -Wlong-long -Winline -Wredundant-decls -Wcast-qual -Wcast-align \
        -D__STRICT_ANSI__
-       
+
+LIBOBJ:=$(LIBSRC:%.c=$(OBJDIR)/%.o)
+TESTOBJ:=$(LIBSRC:%.c=$(TESTDIR)/%.o)
+
 
 ifeq ($(MANIAC),y)
     CFLAGS+=$(MANIACFLAGS)
 endif
 
-OBJECTS:=$(SOURCES:%.c=$(OBJDIR)/%.o)
-DEPS:=$(OBJECTS:%.o=%.d)
+LIBDEPS:=$(LIBOBJ:%.o=%.d)
+TESTDEPS:=$(TESTOBJ:%.o=%.d)
 
 
 # The rules
 
-.PHONY: clean rebuild test
+.PHONY: all clean rebuild test
 
-$(TARGET): $(OBJECTS) Makefile
-	$(LINK) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
-	
-$(OBJDIR)/%.o $(OBJDIR)/%.d: %.c Makefile
+all: coldplasma libedit
+
+coldplasma: $(LIBOBJ) $(OBJDIR)/main.o
+	$(LINK) $^ $(LDFLAGS) -o $@
+
+libedit: $(LIBOBJ) $(OBJDIR)/libedit.o
+	$(LINK) $^ $(LDFLAGS) -o $@ `pkg-config --libs gtk+-2.0`
+
+$(TESTDIR)/test: $(TESTOBJ)
+	$(LINK) $^ $(LDFLAGS) -o $@
+
+$(OBJDIR)/libedit.o $(OBJDIR)/libedit.d: libedit.c Makefile
+	@mkdir -p $(OBJDIR)
+	$(CC) -c $(DEPGEN) $(CFLAGS) $< -o $(OBJDIR)/libedit.o `pkg-config --cflags gtk+-2.0` 
+
+$(TESTOBJ): $(TESTDIR)/%.o: %.c Makefile
+	@mkdir -p $(TESTDIR)
+	$(CC) -DTESTING -c $(DEPGEN) $(CFLAGS) $< -o $(TESTDIR)/$*.o
+
+$(OBJDIR)/%.o: %.c Makefile
 	@mkdir -p $(OBJDIR)
 	$(CC) -c $(DEPGEN) $(CFLAGS) $< -o $(OBJDIR)/$*.o
+	
 
 clean:
-	rm -f $(OBJECTS) $(DEPS) $(TARGET)
-	rmdir $(OBJDIR)
+	rm -f $(LIBOBJ) $(TESTOBJ) $(LIBDEPS) $(TESTDEPS) coldplasma libedit \
+	$(TESTDIR)/test $(OBJDIR)/main.d $(OBJDIR)/main.o $(OBJDIR)/libedit.d \
+	$(OBJDIR)/libedit.o
+	if [ -d $(TESTDIR) ]; then rmdir $(TESTDIR); fi
+	if [ -d $(OBJDIR) ]; then rmdir $(OBJDIR); fi
+	if [ -d $(BASEOBJDIR) ]; then rmdir $(BASEOBJDIR); fi
 
 rebuild: clean $(TARGET)
 
-test: $(TARGET)
-	./$(TARGET)
+test: $(TESTDIR)/test $(TESTOBJ)
+	$<
 
 ifneq ($(MAKECMDGOALS),clean)
   ifneq ($(MAKECMDGOALS),rebuild)
-    -include $(DEPS)
+    -include $(LIBDEPS) $(TESTDEPS)
   endif
 endif

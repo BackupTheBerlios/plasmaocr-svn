@@ -277,8 +277,6 @@ Match match_patterns(Pattern p1, Pattern p2)
     if (r != p2->cc->rope_count)
         return NULL;
 
-    printf("counters match\n");
-    
     assert(p1->ropes_backwards || p2->ropes_backwards);
     if (!p1->ropes_backwards)
     {
@@ -286,28 +284,20 @@ Match match_patterns(Pattern p1, Pattern p2)
         swap = 1;
         p1 = p2;
         p2 = tmp;        
-       printf("swapped \n");
     }
     
     node_mapping = match_clouds(n, p1->nodes_x, p1->nodes_y,
                                    p2->nodes_x, p2->nodes_y);
     if (n && !node_mapping)
         return NULL;
-    printf("node clouds match\n");
     
     rope_mapping = match_clouds(r, p1->rope_medians_x, p1->rope_medians_y,
                                    p2->rope_medians_x, p2->rope_medians_y);
-    int i;
-    for (i = 0; i < r; i++)
-    {
-        printf("(%d %d)   (%d %d)\n", p1->rope_medians_x[i], p1->rope_medians_y[i], p2->rope_medians_x[i], p2->rope_medians_y[i]);
-    }
     if (r && !rope_mapping)
     {
         FREE(node_mapping);
         return NULL;
     }
-    printf("rope clouds match\n");
     
 
     result = MALLOC1(struct MatchStruct);

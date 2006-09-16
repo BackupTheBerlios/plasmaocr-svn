@@ -175,16 +175,15 @@ RecognizedLetter *recognize_pattern(Core c, Pattern p, int need_explanation)
 
     while ((rec = library_iterator_next(&iter)))
     {
+        Match m;
         if (rec->text[0] == '\0') continue;
-        Match m = match_patterns(rec->pattern, p);
+        m = match_patterns(rec->pattern, p);
         assert(rec->pattern);
         if (m)
         {
-            printf("PARTIAL STRUCTURAL MATCH with %s\n", rec->text);
             * (append_match(c)) = m;
             * (append_record(c)) = rec;
         }
-        break; // XXX
     }
 
     if (!c->matches_count)
@@ -339,6 +338,7 @@ RecognizedWord *recognize_word(Core c,
         else
             x_end = width;
 
+        assert(x_end > x_beg);
         p = create_pattern_from_cache(pixels, width, height,
                                       x_beg, 0, x_end - x_beg, height, pc);
 

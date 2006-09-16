@@ -34,9 +34,11 @@ typedef struct
     int colored_output;
     int just_one_letter;
     int just_one_word;
+    int append;
     Core core;
     unsigned char **pixels;
     int width, height;
+    char *ground_truth;
 } Job;
 
 static void init_job(Job *job)
@@ -47,6 +49,8 @@ static void init_job(Job *job)
     job->colored_output = isatty(1);
     job->pixels = NULL;
     job->just_one_word = job->just_one_letter = 0;
+    job->ground_truth = NULL;
+    job->append = 0;
 }
 
 static void load_image(Job *job)
@@ -105,8 +109,10 @@ static void process_letter(Job *job, int x, int y, int w, int h)
     RecognizedLetter *rl = recognize_letter(job->core, window, w, h, 0);
     if (job->colored_output)
         color_print_recognized_letter(rl);
-    else
+    else if (rl->text)
         fputs(rl->text, stdout);
+    else
+        putchar('_');
 
     free_recognized_letter(rl);
     FREE(window);
@@ -191,6 +197,17 @@ int main(int argc, char **argv)
                 job.just_one_letter = 1;
                 job.just_one_word = 0;
             }
+            if (!strcmp(opt, "-t") || !strcmp(opt, "--truth"))
+            {
+                i++; if (!arg) usage();
+                job.just_one_letter = 1;
+                job.just_one_word = 0;
+                job.ground_truth = arg;
+            }
+            if (!strcmp(opt, "-a") || !strcmp(opt, "--append"))
+            {
+                job.append = 1;
+            }
             else if (!strcmp(opt, "-W") || !strcmp(opt, "--word"))
             {
                 job.just_one_letter = 0;
@@ -238,6 +255,18 @@ int main(int argc, char **argv)
     {
         process_letter(&job, 0, 0, job.width, job.height);
         putchar('\n');
+        if (job.ground_truth && job.out_library_path)
+        {
+            Library l = get_core_orange_library(job.core);
+            if (library_shelves_count(l))
+            {
+                Shelf *s = library_get_shelf(l, 0);
+                if (s->count)
+                {
+                    strncpy(s->records[0].text, job.ground_truth, MAX_TEXT_SIZE);
+                }
+            }
+        }
     }
     else if (job.just_one_word)
     {
@@ -261,7 +290,7 @@ int main(int argc, char **argv)
     }
 
     if (job.out_library_path)
-        library_save(get_core_orange_library(job.core), job.out_library_path);
+        library_save(get_core_orange_library(job.core), job.out_library_path, job.append);
 
     free_bitmap(job.pixels);
     free_core(job.core);
