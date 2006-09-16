@@ -65,7 +65,7 @@ static int is_hedgehog(Chaincode *cc, int node_index, int rope_index)
         int current_rope = n->rope_indices[i];
         if (current_rope == rope_index)
             continue;
-        if (cc->nodes[other_end(i, &cc->ropes[rope_index])].degree != 1)
+        if (cc->nodes[other_end(node_index, &cc->ropes[current_rope])].degree != 1)
             return 0;
     }
     return 1;
