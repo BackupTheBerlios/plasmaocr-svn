@@ -9,7 +9,7 @@
 
 #define MAX_WHITE_RUN 15
 #define MAX_BLACK_RUN 15
-#define MAGIC (('r' << 24) || ('l' << 16) || ('e' << 8) || '1')
+#define MAGIC (('r' << 24) | ('l' << 16) | ('e' << 8) | '1')
 
 
 void rle_encode_raw(FILE *f, unsigned char *pixels, int n)

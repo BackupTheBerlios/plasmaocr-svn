@@ -14,7 +14,7 @@ typedef struct PatternCacheStruct *PatternCache;
 Pattern create_pattern(unsigned char **pixels, int width, int height);
 void save_pattern(Pattern p, FILE *f);
 Pattern load_pattern(FILE *f);
-void destroy_pattern(Pattern);
+void free_pattern(Pattern);
 
 
 /* PatternCaches present alternative way of creating a pattern.
@@ -35,5 +35,13 @@ long patterns_shiftcut_dist(Pattern p1, Pattern p2);
 void destroy_match(Match);
 
 int pattern_size_test(Pattern p1, Pattern p2);
+
+#ifdef TESTING
+
+int pattern_equal(Pattern p1, Pattern p2);
+
+extern TestSuite pattern_suite;
+
+#endif
 
 #endif

@@ -109,6 +109,8 @@ int get_bbox_window(unsigned char **pixels, int w, int h,
 
 unsigned char **subbitmap(unsigned char **pixels, int x, int y, int h);
 
+unsigned char **simple_noise(int w, int h);
+
 FUNCTIONS_END
 
 #ifdef TESTING

@@ -552,7 +552,7 @@ static void check_place_for_rope(Chaincode *cc, int current_degree, int node)
 {
     if (current_degree >= cc->nodes[node].degree)
     {
-        fprintf(stderr, "An error occured while reading chaincode object; file corrupted?");
+        fprintf(stderr, "An error occured while reading chaincode object; file corrupted?\n");
         exit(1);
     }
 }
@@ -639,11 +639,46 @@ void chaincode_save(Chaincode *cc, FILE *f)
 
 #ifdef TESTING
 
-
-#include <unistd.h>
-
-static void get_chaincode_and_render(unsigned char **framework, int w, int h, FILE *fr, FILE *fw)
+static int node_equal(Node *n1, Node *n2)
 {
+    return n1->x == n2->x
+        && n1->y == n2->y
+        && n1->degree == n2->degree 
+        && !memcmp(n1->rope_indices, n2->rope_indices, n1->degree * sizeof(int));
+}
+
+static int rope_equal(Rope *r1, Rope *r2)
+{
+    return r1->length == r2->length
+        && !memcmp(r1->steps, r2->steps, r1->length)
+        && r1->start == r2->start
+        && r1->end == r2->end;
+}
+
+int chaincode_equal(Chaincode *cc1, Chaincode *cc2)
+{
+    int i;
+    
+    if (cc1->width != cc2->width || cc1->height != cc2->height)
+        return 0;
+
+    if (cc1->node_count != cc2->node_count || cc1->rope_count != cc2->rope_count)
+        return 0;
+    
+    for (i = 0; i < cc1->node_count; i++)
+        if (!node_equal(&cc1->nodes[i], &cc2->nodes[i]))
+            return 0;
+
+    for (i = 0; i < cc1->rope_count; i++)
+        if (!rope_equal(&cc1->ropes[i], &cc2->ropes[i]))
+            return 0;
+
+    return 1;
+}
+
+static void get_chaincode_and_render(unsigned char **framework, int w, int h, FilePair fp)
+{
+    FILE *f = file_pair_write(fp);
     unsigned char **copy = allocate_bitmap_with_white_margins(w, h);
     Chaincode *cc, *cc2;
     unsigned char **rendered;
@@ -652,9 +687,10 @@ static void get_chaincode_and_render(unsigned char **framework, int w, int h, FI
     rendered = chaincode_render(cc);
     assert(bitmaps_equal(framework, rendered, w, h));
     free_bitmap(rendered);
-    chaincode_save(cc, fw);
-    fflush(fw);
-    cc2 = chaincode_load(fr);
+    chaincode_save(cc, f);
+    f = file_pair_read(fp);
+    cc2 = chaincode_load(f);
+    assert(chaincode_equal(cc, cc2));
     rendered = chaincode_render(cc2);
     assert(bitmaps_equal(framework, rendered, w, h));
     free_bitmap(rendered);    
@@ -663,20 +699,15 @@ static void get_chaincode_and_render(unsigned char **framework, int w, int h, FI
     chaincode_destroy(cc2);
 }
 
-/* for our "maniac" compiling mode */
-FILE *fdopen(int fildes, const char *mode);
-
 static void test_render(void)
 {
     int i;
     int w = 3;
     int h = 4;
-    int filedes[2];
-    FILE *fr, *fw;
+    FilePair fp;
     unsigned char **bitmap;
-    pipe(filedes);
-    fr = fdopen(filedes[0], "rb");
-    fw = fdopen(filedes[1], "wb");
+    
+    fp = file_pair_open();
     
     bitmap = allocate_bitmap_with_white_margins(w, h);
     for (i = 0; i < (1 << w * h); i++)
@@ -685,11 +716,10 @@ static void test_render(void)
         for (y = 0; y < h; y++) for (x = 0; x < w; x++)
             bitmap[y][x] =  (((1 << (y * w + x)) & i)  ?  1  :  0);
         
-        get_chaincode_and_render(bitmap, w, h, fr, fw);
+        get_chaincode_and_render(bitmap, w, h, fp);
     }
     free_bitmap_with_margins(bitmap);
-    fclose(fr);
-    fclose(fw);
+    file_pair_close(fp);
 }
 
 static TestFunction tests[] = {

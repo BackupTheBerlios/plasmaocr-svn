@@ -96,7 +96,10 @@ int chaincode_dy(char c);
 FUNCTIONS_END
 
 #ifdef TESTING
+
+int chaincode_equal(Chaincode *cc1, Chaincode *cc2);
 extern TestSuite chaincode_suite;
+
 #endif
 
 

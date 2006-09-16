@@ -7,6 +7,8 @@
 #include "bitmaps.h"
 #include "chaincode.h"
 #include "editdist.h"
+#include "pattern.h"
+#include "io.h"
 
 
 /* This test is useless - its success is guaranteed by the language standard.
@@ -28,6 +30,8 @@ static TestSuite *suites[] = {&basic_suite,
                               &bitmaps_suite,
                               &chaincode_suite,
                               &editdist_suite,
+                              &io_suite,
+                              &pattern_suite,
                               NULL};
 
 
@@ -112,6 +116,8 @@ int main(void)
 }
 
 #else
+
+#include "testing.h"
 
 /* Just a little export symbol to keep the compiler happy. */
 void dummy_function_testing()

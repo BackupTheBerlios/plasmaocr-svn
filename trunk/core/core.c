@@ -18,7 +18,7 @@ struct CoreStruct
     int matches_count, matches_allocated;
     Match *matches;
     int records_count, records_allocated;
-    LibraryRecord **records;   
+    LibraryRecord **records;
     int orange_policy;
     Library orange_library;
 };
@@ -54,7 +54,7 @@ Library get_core_orange_library(Core c)
     return c->orange_library;
 }
 
-    
+
 Core create_core()
 {
     Core c = MALLOC1(struct CoreStruct);
@@ -65,9 +65,16 @@ Core create_core()
     c->orange_library = NULL;
     return c;
 }
-    
+
 void free_core(Core c)
 {
+    int i;
+
+    for (i = 0; i < c->libraries_count; i++)
+        library_free(c->libraries[i]);
+
+    if (c->orange_library)
+        library_free(c->orange_library);
     FREE(c->libraries);
     FREE(c->matches);
     FREE(c->records);
@@ -99,7 +106,13 @@ static int samples_conflict(LibraryRecord **s, int n)
 static RecognizedLetter *create_recognized_letter(char *text, ColorCode c)
 {
     RecognizedLetter *result = MALLOC1(RecognizedLetter);
-    result->text = text;
+    if (text)
+    {
+        result->text = MALLOC(char, strlen(text) + 1);
+        strcpy(result->text, text);
+    }
+    else
+        result->text = NULL;
     result->color = c;
     result->best_match = NULL;
     return result;
@@ -126,7 +139,7 @@ static RecognizedLetter *shiftcut_recognize(Core c, Pattern p, int need_explanat
     while ((rec = library_iterator_next(&iter)))
     {
         long dist = patterns_shiftcut_dist(rec->pattern, p);
-        
+
         if (dist < best_dist)
         {
             best_dist = dist;
@@ -136,7 +149,7 @@ static RecognizedLetter *shiftcut_recognize(Core c, Pattern p, int need_explanat
     }
 
     result = create_recognized_letter(best, (best ? CC_YELLOW : CC_RED));
-    
+
     if (need_explanation)
     {
         result->best_match = MALLOC1(LibraryIterator);
@@ -155,20 +168,23 @@ RecognizedLetter *recognize_pattern(Core c, Pattern p, int need_explanation)
     LibraryRecord *rec;
     LibraryIterator iter;
     RecognizedLetter *result;
-    
+
     c->matches_count = 0;
     c->records_count = 0;
     iterate_core(c, &iter);
 
     while ((rec = library_iterator_next(&iter)))
     {
+        if (rec->text[0] == '\0') continue;
         Match m = match_patterns(rec->pattern, p);
         assert(rec->pattern);
         if (m)
         {
+            printf("PARTIAL STRUCTURAL MATCH with %s\n", rec->text);
             * (append_match(c)) = m;
             * (append_record(c)) = rec;
         }
+        break; // XXX
     }
 
     if (!c->matches_count)
@@ -181,7 +197,7 @@ RecognizedLetter *recognize_pattern(Core c, Pattern p, int need_explanation)
         int best_match = -1;
         int best_penalty = -1;
         int penalty;
-        
+
         /* Another pass over matches, this time with ED-comparison */
         for (i = 0; i < c->matches_count; i++)
         {
@@ -209,7 +225,7 @@ RecognizedLetter *recognize_pattern(Core c, Pattern p, int need_explanation)
         FREE(good_matches);
         FREE(good_samples);
     }
-    
+
     if (result->color == CC_RED || result->color == CC_YELLOW)
     {
         RecognizedLetter *alternative = shiftcut_recognize(c, p, need_explanation);
@@ -221,7 +237,7 @@ RecognizedLetter *recognize_pattern(Core c, Pattern p, int need_explanation)
 
     for (i = 0; i < c->matches_count; i++)
         destroy_match(c->matches[i]);
-    
+
     return result;
 }
 
@@ -256,9 +272,8 @@ RecognizedLetter *recognize_letter(Core c,
         rec->height = height;
     }
     else
-    {
-        destroy_pattern(p);
-    }
+        free_pattern(p);
+
     return result;
 }
 
@@ -270,7 +285,7 @@ void free_recognized_letter(RecognizedLetter *r)
     FREE1(r);
 }
 
-    
+
 static void build_recognized_word_text(RecognizedWord *rw)
 {
     int s = 0;
@@ -281,7 +296,7 @@ static void build_recognized_word_text(RecognizedWord *rw)
             s += strlen(rw->letters[i]->text);
 
     rw->text = MALLOC(char, s + 1);
-    
+
     s = 0;
     for (i = 0; i < rw->count; i++)
     {
@@ -309,7 +324,7 @@ RecognizedWord *recognize_word(Core c,
     RecognizedWord *rw = MALLOC1(RecognizedWord);
     rw->count = count;
     rw->letters = MALLOC(RecognizedLetter *, count);
-    
+
     for (i = 0; i < count; i++)
     {
         int x_beg, x_end;
@@ -326,7 +341,7 @@ RecognizedWord *recognize_word(Core c,
 
         p = create_pattern_from_cache(pixels, width, height,
                                       x_beg, 0, x_end - x_beg, height, pc);
-        
+
         rw->letters[i] = recognize_pattern(c, p, need_explanation);
 
         /* XXX too much code duplicated with recognize_letter */
@@ -342,7 +357,7 @@ RecognizedWord *recognize_word(Core c,
                 s->height = height;
                 s->ownership = 1;
             }
-            
+
             rec = shelf_append(s);
 
             rec->pattern = p;
@@ -357,15 +372,13 @@ RecognizedWord *recognize_word(Core c,
             rec->height = height;
         }
         else
-        {
-            destroy_pattern(p);
-        }
+            free_pattern(p);
     }
-            
+
     build_recognized_word_text(rw);
     destroy_word_cut(wc);
     destroy_pattern_cache(pc);
-    
+
     return rw;
 }
 
@@ -374,7 +387,8 @@ void free_recognized_word(RecognizedWord *rw)
     int i;
     for (i = 0; i < rw->count; i++)
         free_recognized_letter(rw->letters[i]);
-    
-    FREE(rw->text);
+
+    if (rw->text) FREE(rw->text);
+    FREE(rw->letters);
     FREE1(rw);
 }

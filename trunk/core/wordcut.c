@@ -215,5 +215,7 @@ void destroy_word_cut(WordCut *w)
 {
     FREE(w->level);
     FREE(w->position);
+    FREE(w->window_start);
+    FREE(w->window_end);
     FREE1(w);
 }

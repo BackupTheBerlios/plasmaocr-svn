@@ -5,7 +5,9 @@
 #include "thinning.h"
 #include "bitmaps.h"
 #include "editdist.h"
+#include "io.h"
 #include <assert.h>
+#include <string.h>
 
 #define MAX_SIZE_DIFF_COEF 1.3
 #define COMMON_HALF_PERIMETER 32
@@ -274,6 +276,8 @@ Match match_patterns(Pattern p1, Pattern p2)
         return NULL;
     if (r != p2->cc->rope_count)
         return NULL;
+
+    printf("counters match\n");
     
     assert(p1->ropes_backwards || p2->ropes_backwards);
     if (!p1->ropes_backwards)
@@ -282,20 +286,29 @@ Match match_patterns(Pattern p1, Pattern p2)
         swap = 1;
         p1 = p2;
         p2 = tmp;        
+       printf("swapped \n");
     }
     
     node_mapping = match_clouds(n, p1->nodes_x, p1->nodes_y,
                                    p2->nodes_x, p2->nodes_y);
     if (n && !node_mapping)
         return NULL;
+    printf("node clouds match\n");
     
     rope_mapping = match_clouds(r, p1->rope_medians_x, p1->rope_medians_y,
                                    p2->rope_medians_x, p2->rope_medians_y);
+    int i;
+    for (i = 0; i < r; i++)
+    {
+        printf("(%d %d)   (%d %d)\n", p1->rope_medians_x[i], p1->rope_medians_y[i], p2->rope_medians_x[i], p2->rope_medians_y[i]);
+    }
     if (r && !rope_mapping)
     {
         FREE(node_mapping);
         return NULL;
     }
+    printf("rope clouds match\n");
+    
 
     result = MALLOC1(struct MatchStruct);
     result->node_mapping = node_mapping;
@@ -386,7 +399,7 @@ static void unpromote(Pattern p)
 }
 
 
-void destroy_pattern(Pattern p)
+void free_pattern(Pattern p)
 {
     if (p->ropes_backwards)
         unpromote(p);
@@ -413,3 +426,69 @@ long patterns_shiftcut_dist(Pattern p1, Pattern p2)
 
     return fingerprint_distance_squared(p1->fingerprint, p2->fingerprint);
 }
+
+/* ______________________________   testing   __________________________________ */
+
+#ifdef TESTING
+
+int pattern_equal(Pattern p1, Pattern p2)
+{
+    int n, r;
+    if (!chaincode_equal(p1->cc, p2->cc))
+        return 0;
+    n = p1->cc->node_count;
+    r = p1->cc->rope_count;
+
+    return !memcmp(p1->nodes_x, p2->nodes_x, n * sizeof(int))
+        && !memcmp(p1->nodes_y, p2->nodes_y, n * sizeof(int))
+        && !memcmp(p1->rope_medians_x, p2->rope_medians_x, r * sizeof(int))
+        && !memcmp(p1->rope_medians_y, p2->rope_medians_y, r * sizeof(int))
+        && !memcmp(p1->fingerprint, p2->fingerprint, sizeof(Fingerprint));
+}
+
+static void assert_match_reflexivity(Pattern p)
+{
+    Match m;
+    promote_pattern(p);
+    m = match_patterns(p, p);
+    assert(m);
+    destroy_match(m);
+}
+
+static void test_save_load(void)
+{
+    FilePair fp = file_pair_open();
+    int i;
+    for (i = 0; i < 10; i++)
+    {
+        unsigned char **pixels;
+        FILE *f;
+        Pattern p, p2;
+        int w = 5;
+        int h = 5;
+        srand(i);
+        pixels = simple_noise(w, h);
+        
+        p = create_pattern(pixels, w, h);
+        assert_match_reflexivity(p);
+        f = file_pair_write(fp);
+        save_pattern(p, f);
+        f = file_pair_read(fp);
+        p2 = load_pattern(f);
+        assert(pattern_equal(p, p2));
+        free_pattern(p);
+        free_pattern(p2);
+        free_bitmap(pixels);
+    }
+    file_pair_close(fp);
+}
+
+TestFunction tests[] = {
+    test_save_load, 
+    NULL
+};
+
+TestSuite pattern_suite = {"patterns", NULL, NULL, tests};
+
+
+#endif

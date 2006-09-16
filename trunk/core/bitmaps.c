@@ -4,6 +4,18 @@
 #include <stdio.h>
 
 
+unsigned char **simple_noise(int w, int h)
+{
+    int x, y;
+    unsigned char **pixels = allocate_bitmap(w, h);
+    for (y = 0; y < h; y++)
+        for (x = 0; x < w; x++)
+            pixels[y][x] = rand() & 1;
+
+    return pixels;
+}
+
+
 unsigned char **subbitmap(unsigned char **pixels, int x, int y, int h)
 {
     unsigned char **result = MALLOC(unsigned char *, h);

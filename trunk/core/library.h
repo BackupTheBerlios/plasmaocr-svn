@@ -37,8 +37,8 @@ Library library_create(void);
 Library library_open(const char *path);
 void library_read_prototypes(Library);
 void library_discard_prototypes(Library);
-void library_destroy(Library);
-void library_write(Library, const char *path);
+void library_free(Library);
+void library_save(Library, const char *path);
 int library_shelves_count(Library);
 Shelf *library_get_shelf(Library, int i);
 

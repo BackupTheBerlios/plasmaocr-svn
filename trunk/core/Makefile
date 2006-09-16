@@ -1,12 +1,12 @@
-TARGET=core_test
+TARGET=coldplasma#core_test
 SOURCES:=$(wildcard *.c)
-CFLAGS:=-pipe -g -Wmissing-prototypes -Wall
+CFLAGS:=-pipe -g -Wmissing-prototypes -Wall #-DTESTING
 CC=gcc
 LINK=gcc
 OBJDIR:=obj
 
 #set to `y' for some mad ANSI C compatibility options
-MANIAC:=y
+MANIAC:=n
     
 
 

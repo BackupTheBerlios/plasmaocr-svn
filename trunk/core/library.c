@@ -9,7 +9,7 @@
 void library_iterator_init(LibraryIterator *li, int n, Library *libs)
 {
     li->libraries_count = n;
-    li->libraries = 0;
+    li->libraries = libs;
     li->current_library_index = 0;
     li->current_shelf_index = 0;
 
@@ -24,8 +24,12 @@ void library_iterator_init(LibraryIterator *li, int n, Library *libs)
 LibraryRecord *library_iterator_next(LibraryIterator *li)
 {
     Library l;
+    LibraryRecord *result;
     if (li->current_library_index >= li->libraries_count)
         return NULL;
+    
+    assert(li->current_library_index >= 0);
+    result = &li->current_shelf->records[li->current_record_index];
     
     l = li->libraries[li->current_library_index];
 
@@ -45,13 +49,13 @@ LibraryRecord *library_iterator_next(LibraryIterator *li)
             {
                 /* finish */
                 li->current_library_index = li->libraries_count;
-                return NULL;
+                return result;
             }
         }
         li->current_shelf = library_get_shelf
                                 (l, li->current_shelf_index);
     }
-    return &li->current_shelf->records[li->current_record_index];
+    return result;
 }
 
 
@@ -91,6 +95,7 @@ static void load_record(LibraryRecord *lr, FILE *f)
 {
     int i;
     lr->pattern = load_pattern(f);
+    promote_pattern(lr->pattern);
     lr->disabled = 0;
     lr->radius = read_int32(f);
     for (i = 0; i < MAX_TEXT_SIZE; i++)
@@ -117,6 +122,9 @@ static int load_shelf(Library l, FILE *f)
     int proto_size = read_int32(f);
     int i;
     Shelf *s;
+
+    /* int pattern_size = */ read_int32(f);
+    
     if (feof(f)) return 0;
     if (proto_size <= 0)
     {
@@ -172,18 +180,21 @@ static void shelf_save_prototype(Shelf *s, FILE *f)
 
 static void save_shelf(Shelf *s, FILE *f)
 {
-    long pos1, pos2;
+    long pos1, pos2, pos3;
     int i;
-    pos1 = ftell(f);
     write_int32(0, f); /* to be overwritten later */
+    write_int32(0, f); /* to be overwritten later */
+    pos1 = ftell(f);
     shelf_save_prototype(s, f);
     pos2 = ftell(f);
-    fseek(f, pos1, SEEK_SET);
-    write_int32(pos2 - pos1 - 4 /* without the 0 we've written */, f);
-    fseek(f, pos2, SEEK_SET);    
     write_int32(s->count, f);
     for (i = 0; i < s->count; i++)
         save_record(&s->records[i], f);    
+    pos3 = ftell(f);
+    fseek(f, pos1, SEEK_SET);
+    write_int32(pos2 - pos1, f);
+    write_int32(pos3 - pos2, f);
+    fseek(f, pos3, SEEK_SET);
 }
 
 
@@ -251,13 +262,13 @@ static void shelf_destroy(Shelf *s)
         free_bitmap(s->pixels);
 
     for (i = 0; i < s->count; i++)
-        destroy_pattern(s->records[i].pattern);
+        free_pattern(s->records[i].pattern);
 
     FREE(s->records);
 }
 
 
-void library_destroy(Library l)
+void library_free(Library l)
 {
     int i;
     if (l->file)
@@ -276,7 +287,7 @@ void library_discard_prototypes(Library l)
 }
 
 
-void library_write(Library l, const char *path)
+void library_save(Library l, const char *path)
 {
     FILE *f = fopen(path, "wb");
     int i;
