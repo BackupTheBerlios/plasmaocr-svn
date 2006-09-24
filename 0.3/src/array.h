@@ -18,6 +18,13 @@
  */
 
 
+/** \file array.h
+ * \brief Dynamically growing array.
+ * 
+ * This file contains only the Array template.
+ */
+
+
 #ifndef PLASMA_OCR_ARRAY_H
 #define PLASMA_OCR_ARRAY_H
 
@@ -26,12 +33,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-
-/** \file array.h
- * \brief dynamically growing array
- * 
- * This file contains only the Array template.
- */
 
 PLASMA_BEGIN;
 

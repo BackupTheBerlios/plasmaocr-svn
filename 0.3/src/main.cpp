@@ -2,7 +2,7 @@
 
 PLASMA_BEGIN;
 
-PLASMA_MAIN
+int PLASMA_MAIN(int argc, char *argv[])
 {
     run_all_tests();
     return 0;

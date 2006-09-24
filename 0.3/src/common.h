@@ -11,25 +11,33 @@
  * \todo Make the typedefs more automatic (autoconf?)
  */
 
+/** \namespace plasma
+ * 
+ * That's the namespace in which all the stuff resides unless NO_NAMESPACES
+ * is defined. Macros PLASMA_BEGIN, PLASMA_END and PLASMA_MAIN should do
+ * the namespace handling. Unfortunately, these macros also prevent Doxygen
+ * from understanding what's going on.
+ */
+
 #ifndef NO_NAMESPACES
 
 #   define PLASMA_BEGIN namespace plasma {
 #   define PLASMA_END }
 #   define PLASMA_MAIN \
-    int main(int argc, char *argv[]); \
+    main(int argc, char *argv[]); \
     PLASMA_END; \
     int main(int argc, char *argv[]) \
     { \
         return plasma::main(argc, argv); \
     } \
     PLASMA_BEGIN; \
-    int main(int argc, char *argv[])
+    int main
 
 #else
 
 #   define PLASMA_BEGIN
 #   define PLASMA_END
-#   define PLASMA_MAIN int main(int argc, char *argv[])
+#   define PLASMA_MAIN main
 
 #endif
 
