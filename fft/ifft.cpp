@@ -147,6 +147,38 @@ class Fourier
         }
     }
  
+    
+    /** This is COBRA ("Cache-Optimal Bit-Reverse Algorithm")
+     * from the paper "Towards an Optimal Bit-Reversal Permutation Program"
+     * by Larry Carter and Kang Su Gatlin.
+     */
+    void cobra(Num *out, Num *in, int log_n, int q)
+    {
+        int a, c;
+        int cache_cap = 1 << q;
+        int b_len = log_n - q - q;
+        int s = log_n - q;
+        int b_cap = 1 << b_len;
+        for (int b = 0; b < b_cap; b++)
+        {
+            int b_rev = reverse_bits(b, b_len);
+            for (a = 0; a < cache_cap; a++)
+            {
+                int a_rev = reverse_bits(a, q);
+                for (c = 0; c < cache_cap; c++)
+                    buffer[(a_rev << q) | c] = in[(a << s) | (b << q) | c];
+            }
+            
+            for (c = 0; c < cache_cap; c++)
+            {
+                int c_rev = reverse_bits(c, q);
+                for (a = 0; a < cache_cap; a++)
+                    out[(c_rev << s) | (b_rev << q) | a] = buffer[(a << q) | c];
+            }
+        }
+    }
+
+    
     void in_place_permute(Num *A, int log_n)
     {
         unsigned n = 1 << log_n;
@@ -177,14 +209,25 @@ class Fourier
         }    
     }
 
+
+    void cobra(Num *out, Num *in, int log_n)
+    {
+        int q1 = log_n / 2;
+        int q2 = log_chunk_size / 2;
+        int q = (q1 > q2  ?  q2  :  q1);
+        cobra(out, in, log_n, q);
+    }
+    
+    
     void permute(Num *out, Num *in, int log_n)
     {
-        if (in == out)
+        /*if (in == out)
             in_place_permute(in, log_n);
         else
-            out_of_place_permute(out, in, log_n);
+            out_of_place_permute(out, in, log_n);*/
+        cobra(out, in, log_n);
     }
-
+    
     
     /* FFT without bit-reverse.
      * This corresponds to Cormen, Leiserson, Rivest, 32.3, "Iterative-FFT",
