@@ -21,7 +21,7 @@ static int thue_morse(unsigned a)
     // Guessing how this implementation works
     // is left as an excercise to the reader!
     
-    for (int i = 1; i < sizeof(a) * 8; i <<= 1)
+    for (unsigned i = 1; i < sizeof(a) * 8; i <<= 1)
         a ^= a >> i;
     return a & 1;
 }
@@ -51,9 +51,10 @@ static unsigned reverse_bits(unsigned a, int log_n)
  * primary_root - a primary_root modulo P
  * log_chunk_size - log_2 of the size of a chunk (most likely, should be cache size) 
  */
-template <int P, int S, class Num, class DNum, int primary_root>
+template <int P, int S, class Num, class DNum, Num primary_root>
 class Fourier
 {
+    const int threshold;
     const int log_chunk_size;
     const int half_chunk_size;
     const int chunk_size;
@@ -92,12 +93,14 @@ class Fourier
 
     static inline Num add(Num a, Num b)
     {
-        return (a + b) % P;
+        Num s = a + b;
+        return (s >= P  ?  s - P  :  s);
     }
 
     static inline Num sub(Num a, Num b)
     {
-        return (P + a - b) % P;
+        Num d = P + a - b;
+        return (d >= P  ?  d - P  :  d);
     }    
 
     static inline Num mul(Num a, Num b)
@@ -213,15 +216,9 @@ class Fourier
     }
 
     
-    void fft_small(Num *A, Num *omegas, int n)
+    inline void butterfly(Num *A, Num *B, Num *W, int size)
     {
-        fft_raw(A, omegas, n, log_chunk_size);
-    }
-
-
-    void half_butterfly(Num *A, Num *B, Num *W)
-    {
-        for (int i = 0; i < half_chunk_size; i++)
+        for (int i = 0; i < size; i++)
         {
             Num t = mul(W[i], B[i]);
             Num u = A[i];
@@ -230,20 +227,40 @@ class Fourier
         }
     }
     
-    void butterfly(Num *A, Num *B, int swapper)
+    void butterfly_chunk(Num *A, Num *B, int swapper)
     {
         if (!swapper)
         {
-            half_butterfly(A, B + half_chunk_size, buffer);
-            half_butterfly(A + half_chunk_size, B, buffer + half_chunk_size);
+            butterfly(A, B + half_chunk_size, buffer, half_chunk_size);
+            butterfly(A + half_chunk_size, B, buffer + half_chunk_size, half_chunk_size);
         }
         else
         {
-            half_butterfly(A, B + half_chunk_size, buffer + half_chunk_size);
-            half_butterfly(A + half_chunk_size, B, buffer);
+            butterfly(A, B + half_chunk_size, buffer + half_chunk_size, half_chunk_size);
+            butterfly(A + half_chunk_size, B, buffer, half_chunk_size);
         }
     }
 
+    void fft_medium(Num *A, Num *omegas, int n, int level_min, int level_cap)
+    {
+        for (int i = level_min; i < level_cap; i++)
+        {
+            int w = 1;
+            Num omega_m = omegas[i];
+            int m = 1 << i, twice_m = m << 1;
+            int j;
+
+            for (j = 0; j < m; j++)
+            {
+                buffer[j] = w;
+                w = mul(w, omega_m);                
+            }
+            
+            
+            for (int k = 0; k < n; k += twice_m)
+                butterfly(A + k, A + k + m, buffer, m);
+        }
+    }
     
     void fft_big(Num *A, Num *omegas, int n, int log_n)
     {
@@ -264,7 +281,7 @@ class Fourier
                 }
                 
                 for (k = j; k < n; k += twice_m)
-                    butterfly(A + k, A + k + m, thue_morse(k >> log_chunk_size));
+                    butterfly_chunk(A + k, A + k + m, thue_morse(k >> log_chunk_size));
             }
         }
     }
@@ -370,7 +387,8 @@ class Fourier
     
 public:
 
-    Fourier(int _log_chunk_size) : 
+    Fourier(int _threshold, int _log_chunk_size) : 
+        threshold(_threshold),
         log_chunk_size(_log_chunk_size),
         half_chunk_size(1 << (log_chunk_size - 1)),
         chunk_size(1 << log_chunk_size),
@@ -406,7 +424,8 @@ public:
             fft_raw(out, omegas, n, log_n);
         else
         {
-            fft_small(out, omegas, n);
+            fft_raw(out, omegas, n, threshold);
+            fft_medium(out, omegas, n, threshold, log_chunk_size);
             swap_chunks(out, n);
             fft_big(out, omegas, n, log_n);
             swap_chunks(out, n);
@@ -444,7 +463,7 @@ public:
 
 static Fourier<FFT_P, MAX_LOG_FFT_SIZE, uint32_t, uint64_t, /* primary root: */10>
 //static Fourier<257, 8, uint32_t, uint64_t, /* primary root: */3>
-    fourier(/* log_chunk_size: */ 5);
+    fourier(2, /* log_chunk_size: */ 12);
 
 void fft(uint32_t *out, uint32_t *in, int log_n, int sign)
 {
