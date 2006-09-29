@@ -102,7 +102,7 @@ class Fourier
     {
         Num d = P + a - b;
         return (d >= P  ?  d - P  :  d);
-    }    
+    } 
 
 
 
@@ -123,7 +123,8 @@ class Fourier
         //
         // Here we set `t' to be x0 * P^{-1} modulo 2^{31}.
         // So we'll have  t * P == x (mod 2^{31}).
-        Num t = ((x0 << FFT_P_MINUS) + x0) & 0x7FFFFFFF;
+        //Num t = ((x0 << FFT_P_MINUS) + x0) & 0x7FFFFFFF;
+        Num t = (x0 * ((1 << FFT_P_MINUS) + 1)) & 0x7FFFFFFF;
 
         // u = t * P / 2^{31} 
         // Note that t * P % 2^{31} == x0 by construction of t.
@@ -275,6 +276,19 @@ class Fourier
         cobra(out, in, log_n);
     }
     
+
+    static void fft_level_0(Num *A, Num *omegas, int n)
+    {
+        for (int k = 0; k < n; k += 2)
+        {
+            Num t = A[k + 1];
+            Num u = A[k];
+            A[k] = add(u, t);
+            A[k + 1] = sub(u, t);
+        }
+    }
+
+
     
     /* FFT without bit-reverse.
      * This corresponds to Cormen, Leiserson, Rivest, 32.3, "Iterative-FFT",
@@ -282,17 +296,31 @@ class Fourier
      *   1) no Bit-Reverse-Copy is called
      *   2) i == s - 1  (we have i, CLR have s)
      *   3) our twice_m is m in CLR
+     *   4) first level is separate
+     *   5) inner loop is repeated to exclude multiplication by 1
      */
     static void fft_raw(Num *A, Num *omegas, int n, int levels_to_go)
     {
-        for (int i = 0; i < levels_to_go; i++)
+        if (levels_to_go == 0) return;
+        fft_level_0(A, omegas, n);
+        
+        for (int i = 1; i < levels_to_go; i++)
         {
             int w = 1;
             Num omega_m = omegas[i];
             int m = 1 << i, twice_m = m << 1;
             
-            for (int j = 0; j < m; j++)
+            for (int k = 0; k < n; k += twice_m)
             {
+                Num t = A[k + m];
+                Num u = A[k];
+                A[k] = add(u, t);
+                A[k + m] = sub(u, t);
+            }
+            
+            for (int j = 1; j < m; j++)
+            {
+                w = mul(w, omega_m);
                 for (int k = j; k < n; k += twice_m)
                 {
                     Num t = mul(w, A[k + m]);
@@ -300,18 +328,31 @@ class Fourier
                     A[k] = add(u, t);
                     A[k + m] = sub(u, t);
                 }
-                w = mul(w, omega_m);
             }
         }
     }
 
-    
     inline void butterfly(Num *A, Num *B, Num *W, int size)
     {
         for (int i = 0; i < size; i++)
         {
             Num t = mul(W[i], B[i]);
             Num u = A[i];
+            A[i] = add(u, t);
+            B[i] = sub(u, t);
+        }
+    }
+
+    inline void butterfly_1_excl(Num *A, Num *B, Num *W, int size)
+    {
+        Num t = *B;
+        Num u = *A;
+        *A = add(u, t);
+        *B = sub(u, t);
+        for (int i = 1; i < size; i++)
+        {
+            t = mul(W[i], B[i]);
+            u = A[i];
             A[i] = add(u, t);
             B[i] = sub(u, t);
         }
@@ -348,7 +389,7 @@ class Fourier
             
             
             for (int k = 0; k < n; k += twice_m)
-                butterfly(A + k, A + k + m, buffer, m);
+                butterfly_1_excl(A + k, A + k + m, buffer, m);
         }
     }
     
@@ -582,7 +623,7 @@ public:
 
 static Fourier<FFT_P, MAX_LOG_FFT_SIZE, uint32_t, uint64_t, /* primary root: */31>
 //static Fourier<257, 8, uint32_t, uint64_t, /* primary root: */3>
-    fourier(2, /* log_chunk_size: */ 12);
+    fourier(3, /* log_chunk_size: */ 14);
 
 void fft(uint32_t *out, uint32_t *in, int log_n, int sign)
 {
@@ -598,6 +639,28 @@ void sft(uint32_t *out, uint32_t *in, int log_n, int sign)
 void fft_test()
 {
     fourier.test_all();
+}
+
+
+static uint32_t pow_mod_2_32(uint32_t base, uint32_t exp)
+{
+    uint32_t q;
+    
+    if (exp == 0)
+        return 1;
+
+    q = pow_mod_2_32(base, exp / 2);
+    q *= q;
+        
+    if (exp % 2)
+        return q * base;
+    else
+        return q;
+}
+
+uint32_t invert_fft_prime()
+{
+    return pow_mod_2_32(FFT_P, (1U<<31) - 1);
 }
 
 #endif
