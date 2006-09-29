@@ -1,5 +1,6 @@
 #include "ifft.h"
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -103,11 +104,57 @@ class Fourier
         return (d >= P  ?  d - P  :  d);
     }    
 
-    static inline Num mul(Num a, Num b)
+
+
+    /* Montgomery reduction.
+     * I've read about this trick in an article by Tommy F\"arnqvist.
+     * 
+     * x < 2^31 * P
+     * result < P, equal to x / 2^31 (mod P)
+     */
+    static inline Num montgomery31(DNum x)
     {
-        return (DNum) a * b % P;
+        // x == 2^{31} * x1 + x0
+        Num x0 = (Num) x & 0x7FFFFFFF;
+        Num x1 = (Num) (x >> 31);
+
+        // 2^{FFT_P_MINUS} + 1 is inverse to P modulo 2^{31}:
+        // (1 - 2^{FFT_P_MINUS}) (1 + 2^{FFT_P_MINUS)) = 1 - (...)^2 = 1
+        //
+        // Here we set `t' to be x0 * P^{-1} modulo 2^{31}.
+        // So we'll have  t * P == x (mod 2^{31}).
+        Num t = ((x0 << FFT_P_MINUS) + x0) & 0x7FFFFFFF;
+
+        // u = t * P / 2^{31} 
+        // Note that t * P % 2^{31} == x0 by construction of t.
+        // So we can put it this way: (t * P - x0) / 2^{31}, where `/' has no remainder.
+        Num u = ((DNum) t * P) >> FFT_P_PLUS;
+        
+        if (x1 >= u)
+            return x1 - u;
+        else
+            return P + x1 - u;
+    }
+    
+
+    // multiply x by 2^31 (mod P)
+    static inline Num montgomery31_into(Num x)
+    {
+        return ((DNum) x << 31) % P;
     }
 
+    // divide x by 2^31 (mod P)
+    static inline Num montgomery31_from(Num x)
+    {
+        return montgomery31(x);
+    }    
+
+
+    static inline Num mul(Num a, Num b)
+    {
+        return montgomery31((DNum) a * b);
+    }
+    
     // representations and arithmetic modulo P }}}
 
 
@@ -364,6 +411,15 @@ class Fourier
             assert(P % i);
     }
 
+    void test_montgomery()
+    {
+        for (Num i = 0; i < (1 << 31); i+=1270)
+        {
+            assert(i % P == montgomery31_into(montgomery31(i)));
+            assert(i % P == montgomery31(montgomery31_into(i)));
+        }
+    }
+    
 #endif
 
 // tests }}}
@@ -384,7 +440,7 @@ class Fourier
         Num q;
         
         if (exp == 0)
-            return 1;
+            return montgomery31_into(1);
 
         q = pow_mod_p(base, exp / 2);
         q = mul(q, q);
@@ -400,29 +456,33 @@ class Fourier
     {
         assert(P % (1 << S) == 1);
     
+        assert(montgomery31_from(pow_mod_p(generator, (P-1) >> 1)) == P - 1);
         Num w = pow_mod_p(generator, (P - 1) >> S);
         for (int i = S; i; i--)
         {
             omegas[i - 1] = w;
             w = mul(w, w);
         }
-        assert(omegas[0] == P - 1);
+        assert(montgomery31_from(omegas[0]) == P - 1);
     }
 
 
     static Num invert(Num a)
     {
         return pow_mod_p(a, P - 2); // using Fermat Little Theorem
+        // (that's very stupid, because Euclid's algorithm is the way to go)
+        // but this function is called just once, so no one cares. 
     }
     
     
     void fill_omegas()
     {
-        calc_omegas(positive_omegas, primary_root);
-        calc_omegas(negative_omegas, invert(primary_root));
+        uint32_t m_root = montgomery31_into(primary_root);
+        calc_omegas(positive_omegas, m_root);
+        calc_omegas(negative_omegas, invert(m_root));
         
         for (int i = 0; i < S; i++)
-            assert(mul(positive_omegas[i], negative_omegas[i]) == 1);
+            assert(mul(positive_omegas[i], negative_omegas[i]) == montgomery31_into(1));
     }
 
 // }}}
@@ -460,8 +520,11 @@ public:
     void fft(Num *out, Num *in, int log_n, int sign)
     {
         init();
+        int i;
         int n = 1 << log_n;
         permute(out, in, log_n);
+        for (i = 0; i < n; i++)
+            out[i] = montgomery31_into(out[i]);
         Num *omegas = (sign == 1 ? positive_omegas : negative_omegas);
         if (log_n <= log_chunk_size)
             fft_raw(out, omegas, n, log_n);
@@ -474,6 +537,8 @@ public:
             swap_chunks(out, n);
             //polish(out, 1 << log_n);
         }
+        for (i = 0; i < n; i++)
+            out[i] = montgomery31_from(out[i]);
     }
 
 #ifndef NDEBUG
@@ -495,16 +560,27 @@ public:
             int j;
 
             for (j = 0; j < n; j++)
-                out[i] = add(out[i], mul(in[j], pow_mod_p(w, i * j)));
+                out[i] = add(out[i], ((DNum) in[j] * pow_mod_p(w, i * j)) % P);
         }
 
         //polish(out, n);
     }
+
+    void test_all()
+    {
+        printf("running tests...");
+        fflush(stdout);
+        test_types();
+        test_P_is_prime();
+        test_montgomery();
+        printf("done\n");
+    }
+
 #endif
 };
 
 
-static Fourier<FFT_P, MAX_LOG_FFT_SIZE, uint32_t, uint64_t, /* primary root: */10>
+static Fourier<FFT_P, MAX_LOG_FFT_SIZE, uint32_t, uint64_t, /* primary root: */31>
 //static Fourier<257, 8, uint32_t, uint64_t, /* primary root: */3>
     fourier(2, /* log_chunk_size: */ 12);
 
@@ -518,5 +594,10 @@ void sft(uint32_t *out, uint32_t *in, int log_n, int sign)
 {
     fourier.sft(out, in, log_n, sign);
 }
-#endif
 
+void fft_test()
+{
+    fourier.test_all();
+}
+
+#endif
