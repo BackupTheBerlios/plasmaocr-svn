@@ -49,10 +49,10 @@ static unsigned reverse_bits(unsigned a, int log_n)
 
 /**
  * DNum - unsigned integer type twice as large as Num
- * primary_root - a primary_root modulo P
+ * primitive_root - a primitive_root modulo P
  * log_chunk_size - log_2 of the size of a chunk (most likely, should be cache size) 
  */
-template <int P, int S, class Num, class DNum, Num primary_root>
+template <int P, int S, class Num, class DNum, Num primitive_root>
 class Fourier
 {
     const int threshold;
@@ -61,12 +61,10 @@ class Fourier
     const int chunk_size;
     Num *buffer;
     Num positive_omegas[S], negative_omegas[S];
-    unsigned *permutation_table[S];
  
     enum
     {
         optimization_offset = 16,   // this helps very little
-        MAX_PERMUTATION_CACHED = 8
     };
 
     // representations and arithmetic modulo P {{{
@@ -159,41 +157,6 @@ class Fourier
     // representations and arithmetic modulo P }}}
 
 
-    void fill_permutation_table_if_needed(int log_n)
-    {
-        assert(log_n <= S);
-        int n = 1 << log_n;
-        
-        if (permutation_table[log_n])
-            return;
-
-        uint32_t *table = permutation_table[log_n] = new uint32_t[1 << log_n];
-        
-        for (int i = 0; i < n; i++)
-            table[i] = reverse_bits(i, log_n);
-    }
-
-    
-    void out_of_place_permute(Num *out, Num *in, int log_n)
-    {
-        int n = 1 << log_n;
-
-        // assert that the areas don't overlap
-        assert(!(out >= in  &&  out < in + n));
-        assert(!(in >= out  &&  in < out + n));
-        
-        if (log_n <= MAX_PERMUTATION_CACHED)
-        {
-            fill_permutation_table_if_needed(log_n);
-            for (int i = 0; i < n; i++)
-                out[permutation_table[log_n][i]] = in[i];
-        }
-        else
-        {
-            for (int i = 0; i < n; i++)
-                out[reverse_bits(i, log_n)] = in[i];
-        }
-    }
  
     
     /** This is COBRA ("Cache-Optimal Bit-Reverse Algorithm")
@@ -225,38 +188,7 @@ class Fourier
             }
         }
     }
-
     
-    void in_place_permute(Num *A, int log_n)
-    {
-        unsigned n = 1 << log_n;
-        
-        #define PERMUTE(GET_PERMUTATION)                    \
-            for (unsigned i = 0; i < n; i++)                \
-            {                                               \
-                unsigned rev = GET_PERMUTATION(i, log_n);   \
-                if (i < rev)                                \
-                {                                           \
-                    Num tmp = A[i];                         \
-                    A[i] = A[rev];                          \
-                    A[rev] = tmp;                           \
-                }                                           \
-            }
-        
-
-        if (log_n <= MAX_PERMUTATION_CACHED)
-        {
-            fill_permutation_table_if_needed(log_n);
-            #define PERM_GET_FROM_TABLE(I, LOG_N) permutation_table[LOG_N][I]
-            PERMUTE(PERM_GET_FROM_TABLE);
-        }
-        else
-        {
-            #define PERM_CALCULATE(I, LOG_N) reverse_bits(I, LOG_N)
-            PERMUTE(PERM_CALCULATE);
-        }    
-    }
-
 
     void cobra(Num *out, Num *in, int log_n)
     {
@@ -267,16 +199,6 @@ class Fourier
     }
     
     
-    void permute(Num *out, Num *in, int log_n)
-    {
-        /*if (in == out)
-            in_place_permute(in, log_n);
-        else
-            out_of_place_permute(out, in, log_n);*/
-        cobra(out, in, log_n);
-    }
-    
-
     static void fft_level_0(Num *A, Num *omegas, int n)
     {
         for (int k = 0; k < n; k += 2)
@@ -306,7 +228,7 @@ class Fourier
         
         for (int i = 1; i < levels_to_go; i++)
         {
-            int w = 1;
+            Num w = 1;
             Num omega_m = omegas[i];
             int m = 1 << i, twice_m = m << 1;
             
@@ -376,7 +298,7 @@ class Fourier
     {
         for (int i = level_min; i < level_cap; i++)
         {
-            int w = 1;
+            Num w = 1;
             Num omega_m = omegas[i];
             int m = 1 << i, twice_m = m << 1;
             int j;
@@ -518,7 +440,7 @@ class Fourier
     
     void fill_omegas()
     {
-        uint32_t m_root = montgomery31_into(primary_root);
+        uint32_t m_root = montgomery31_into(primitive_root);
         calc_omegas(positive_omegas, m_root);
         calc_omegas(negative_omegas, invert(m_root));
         
@@ -563,12 +485,15 @@ public:
         init();
         int i;
         int n = 1 << log_n;
-        permute(out, in, log_n);
+        cobra(out, in, log_n);
         for (i = 0; i < n; i++)
             out[i] = montgomery31_into(out[i]);
         Num *omegas = (sign == 1 ? positive_omegas : negative_omegas);
         if (log_n <= log_chunk_size)
+        {
+            // XXX: log_n <= threshold?
             fft_raw(out, omegas, n, log_n);
+        }
         else
         {
             fft_raw(out, omegas, n, threshold);
