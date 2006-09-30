@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include "fftt.h"
 #include <stdlib.h>
+#include <signal.h>
 
 
 struct ModPrimeArith
@@ -127,14 +128,31 @@ struct ModPrimeArith
 };
 
 //FFTT<uint32_t, ModPrimeArith> fft_mod_prime(2, 14);
-FFTT<uint32_t, ModPrimeArith> fft_mod_prime(1, 2);
+FFTT<uint32_t, ModPrimeArith> fft_mod_prime_good(1, 14);
+FFTT<uint32_t, ModPrimeArith> fft_mod_prime_bad(1, 1);
 
 #ifdef TEST
 
+/** We're catching SIGABRT in order to get a meaningful coverage
+ * profile in such a case.
+ */
+void aborted(int)
+{
+    fputs("Abort signal caught, exiting\n", stderr);
+    exit(1);
+}
+
 int main()
 {
-    fft_mod_prime.test_sft_eq_fft_simple();
-    fft_mod_prime.test_fft_eq_fft_simple();
+    signal(SIGABRT, aborted);
+    fft_mod_prime_good.test_bit_reverse();
+    fft_mod_prime_good.test_sft_eq_fft_simple();
+    fft_mod_prime_bad.test_bit_reverse();
+    fft_mod_prime_bad.test_sft_eq_fft_simple();
+    fft_mod_prime_good.test_fft_big();
+    fft_mod_prime_bad.test_fft_big();
+    fft_mod_prime_bad.test_fft_eq_fft_simple();
+    fft_mod_prime_good.test_fft_eq_fft_simple();
 }
 
 #endif

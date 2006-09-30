@@ -2,6 +2,7 @@
 #define FFTT_H
 
 #include <string.h>
+#include <stdio.h>
 #include <assert.h>
 
 enum
@@ -76,9 +77,34 @@ template <class Num, class Arith> class FFTT
             if (a & (1 << i))
                 result += 1 << (log_n - i - 1);
         }
+        assert(result < (1U << log_n));
         
         return result;
     }
+    
+
+    static inline void bit_reverse_load
+        (Num *buf, Num *in, unsigned b, int s, int q, unsigned cache_cap)
+    {
+        for (unsigned a = 0; a < cache_cap; a++)
+        {
+            unsigned a_rev = reverse_bits(a, q);
+            for (unsigned c = 0; c < cache_cap; c++)
+                buf[(a_rev << q) + c] = in[(a << s) + (b << q) + c];
+        }
+    }
+
+    static inline void bit_reverse_save
+        (Num *buf, Num *out, unsigned b_rev, int s, int q, unsigned cache_cap)
+    {
+        for (unsigned c = 0; c < cache_cap; c++)
+        {
+            unsigned c_rev = reverse_bits(c, q);
+            for (unsigned a = 0; a < cache_cap; a++)
+                out[(c_rev << s) + (b_rev << q) + a] = buf[(a << q) + c];
+        }
+    }
+
     
 
     /** \brief Bit-reverse (both in-place and out-of-place).
@@ -86,7 +112,7 @@ template <class Num, class Arith> class FFTT
      * from the paper "Towards an Optimal Bit-Reversal Permutation Program"
      * by Larry Carter and Kang Su Gatlin.
      */
-    void bit_reverse(Num *out, Num *in, int log_n)
+    void out_of_place_bit_reverse(Num *out, Num *in, int log_n)
     {
         // Choosing q
         int q1 = log_n / 2;
@@ -94,30 +120,74 @@ template <class Num, class Arith> class FFTT
         int q = (q1 > q2  ?  q2  :  q1);
         
         // COBRA begins
-        int a, c;
-        int cache_cap = 1 << q;
+        unsigned cache_cap = 1U << q;
         int b_len = log_n - q - q;
         int s = log_n - q;
-        int b_cap = 1 << b_len;
-        for (int b = 0; b < b_cap; b++)
+        unsigned b_cap = 1U << b_len;
+        
+        assert(b_len >= 0);
+        assert(2 * q <= log_chunk_size);
+        
+        for (unsigned b = 0; b < b_cap; b++)
         {
-            int b_rev = reverse_bits(b, b_len);
-            for (a = 0; a < cache_cap; a++)
+            unsigned b_rev = reverse_bits(b, b_len);
+            bit_reverse_load(buffer, in,  b,     s, q, cache_cap);
+            bit_reverse_save(buffer, out, b_rev, s, q, cache_cap);    
+        }
+    }
+
+    void in_place_bit_reverse(Num *A, int log_n)
+    {
+        // Choosing q
+        int q1 = log_n / 2;
+        int q2 = (log_chunk_size - 1) / 2; // we use 2 buffers of 2^2q each
+        int q = (q1 > q2  ?  q2  :  q1);
+        Num *buffer2 = buffer + half_chunk_size; 
+
+        // COBRA begins
+        unsigned cache_cap = 1U << q;
+        int b_len = log_n - q - q;
+        int s = log_n - q;
+        unsigned b_cap = 1U << b_len;
+        
+        assert(b_len >= 0);
+        assert(2 * q <= log_chunk_size);
+        
+        for (unsigned b = 0; b < b_cap; b++)
+        {
+            unsigned b_rev = reverse_bits(b, b_len);
+            if (b_rev > b) continue;
+            if (b_rev == b)
             {
-                int a_rev = reverse_bits(a, q);
-                for (c = 0; c < cache_cap; c++)
-                    buffer[(a_rev << q) | c] = in[(a << s) | (b << q) | c];
+                bit_reverse_load(buffer, A, b, s, q, cache_cap);
+                bit_reverse_save(buffer, A, b, s, q, cache_cap);
             }
-            
-            for (c = 0; c < cache_cap; c++)
-            {
-                int c_rev = reverse_bits(c, q);
-                for (a = 0; a < cache_cap; a++)
-                    out[(c_rev << s) | (b_rev << q) | a] = buffer[(a << q) | c];
+            else
+            {                
+                bit_reverse_load(buffer,  A, b,     s, q, cache_cap);
+                bit_reverse_load(buffer2, A, b_rev, s, q, cache_cap);
+                bit_reverse_save(buffer,  A, b_rev, s, q, cache_cap);
+                bit_reverse_save(buffer2, A, b,     s, q, cache_cap);
             }
         }
     }
+    
+    void bit_reverse(Num *out, Num *in, int log_n)
+    {
+        if (out == in)
+            in_place_bit_reverse(out, log_n);
+        else
+        {
+            // assert that the regions don't overlap
+            assert(in < out || in >= out + (1 << log_n));
+            assert(out < in || out >= in + (1 << log_n));
+            
+            out_of_place_bit_reverse(out, in, log_n);
+        }
+    }
+    
     // bit-reverse }}}
+    
     
     // butterflies {{{
     
@@ -248,7 +318,7 @@ template <class Num, class Arith> class FFTT
     
     void fft_big(Num *A, Num *omegas, unsigned n, int level)
     {
-        Num w = 1;
+        Num w = Arith::unity();
         Num omega_m = omegas[level];
         unsigned m = 1 << level, twice_m = m << 1;
         
@@ -384,8 +454,8 @@ public:
         bit_reverse_first(_bit_reverse_first),
         twiddle_precompute_level(_twiddle_precompute_level),
         log_chunk_size(_log_chunk_size),
-        half_chunk_size(1U << (log_chunk_size - 1)),
-        chunk_size(1U << log_chunk_size),
+        half_chunk_size(1U << (_log_chunk_size - 1)),
+        chunk_size(1U << _log_chunk_size),
         buffer(0),
         buffer_offset(_buffer_offset)
     {
@@ -515,21 +585,68 @@ private:
     }
 
 public:
+
+    
+    void test_bit_reverse()
+    {
+        init();
+        for (int i = 0; i < 18; i++)
+        {
+            int n = 1 << i;
+            Num *buf = new Num[1 << i];
+            for (int k = 0; k < n; k++)
+                buf[k] = k;
+            bit_reverse(buf, buf, i);
+            for (int k = 0; k < n; k++)
+                assert(buf[k] == reverse_bits(k, i));
+        }
+        puts("test_bit_reverse passed");
+    }
+    
     
     void test_sft_eq_fft_simple()
     {
         for (int i = 0; i < 8; i++)
         {
-            Num buf1[1 << i];
-            Num buf2[1 << i];
-            Num buf3[1 << i];
-            for (int k = 0; k < (1 << i); k++)
+            int n = 1 << i;
+            Num buf1[n];
+            Num buf2[n];
+            Num buf3[n];
+            for (int k = 0; k < n; k++)
                 buf1[k] = buf2[k] = Arith::sample(k);
             sft(buf3, buf1, i); 
             fft(buf2, buf2, i, 1, FFTT_SIMPLE);
-            for (int k = 0; k < (1 << i); k++)
+            for (int k = 0; k < n; k++)
                 assert(Arith::eq(buf2[k], buf3[k]));
         }
+        puts("test_sft_eq_fft_simple passed");
+    }
+
+    void test_fft_big()
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            Num *buf1 = new Num[1 << i];
+            Num *buf2 = new Num[1 << i];
+            Num *buf3 = new Num[1 << i];
+            for (int k = 0; k < (1 << i); k++)
+                buf1[k] = buf2[k] = Arith::sample(k);
+            swap_chunks(buf2, 1 << i);
+
+            for (int level = log_chunk_size; level < i; level++)
+            {
+                fft_small(buf1, positive_omegas, 1 << i, level);
+                fft_big(buf2, positive_omegas, 1 << i, level);
+                memcpy(buf3, buf2, (1 << i) * sizeof(Num));
+                swap_chunks(buf3, 1 << i);
+                for (int k = 0; k < (1 << i); k++)
+                    assert(Arith::eq(buf1[k], buf3[k]));
+            }
+            delete [] buf1;
+            delete [] buf2;
+            delete [] buf3;
+        }        
+        puts("test_fft_big passed");
     }
 
     void test_fft_eq_fft_simple()
@@ -547,6 +664,7 @@ public:
             delete [] buf1;
             delete [] buf2;
         }
+        puts("test_fft_eq_fft_simple passed");
     }
     
     #endif // !NDEBUG
