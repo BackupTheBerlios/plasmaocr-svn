@@ -53,3 +53,19 @@ template <class Num> struct RingArith
 
 FFTT<uint32_t, RingArith<uint32_t> > fft_ring_32(2, 14);
 FFTT<uint64_t, RingArith<uint64_t> > fft_ring_64(2, 13);
+
+#ifdef RING_BENCH
+
+#define LOG_N 20
+uint64_t buf[1 << LOG_N];
+int main()
+{
+    int i;
+    for (i = 0; i < (1 << LOG_N); i++)
+        buf[i] = rand();// % ModPrimeArith::P;
+    for (i = 0; i < 10; i++)
+        fft_ring_64.fft(buf, buf, LOG_N);
+    return 0;
+}
+
+#endif

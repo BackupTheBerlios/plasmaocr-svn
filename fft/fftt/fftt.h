@@ -222,12 +222,40 @@ template <class Num, class Arith> class FFTT
             one_butterfly_ascending(A++, B++, *W++);
     }
 
+    inline void butterfly_ascending_double(Num *A, Num *W, Num *WBig, unsigned size)
+    {
+        Num *a = A, *b = A + size;
+        for (unsigned i = 0; i < size; i++)
+            one_butterfly_ascending(a++, b++, W[i]);
+        a = b + size;
+        for (unsigned i = 0; i < size; i++)
+            one_butterfly_ascending(b++, a++, W[i]);
+        size <<= 1;
+        b = A + size;
+        for (unsigned i = 0; i < size; i++)
+            one_butterfly_ascending(A++, b++, *WBig++);
+    }
+    
     inline void butterfly_descending(Num *A, Num *B, Num *W, unsigned size)
     {
         for (unsigned i = 0; i < size; i++)
             one_butterfly_descending(A++, B++, *W++);
     }
 
+    inline void butterfly_descending_double(Num *A, Num *W, Num *WBig, unsigned size)
+    {
+        unsigned dsize = size << 1;
+        Num *a = A, *b = a + dsize;
+        for (unsigned i = 0; i < dsize; i++)
+            one_butterfly_descending(a++, b++, *WBig++);
+        a = A; b = a + size;
+        for (unsigned i = 0; i < size; i++)
+            one_butterfly_descending(a++, b++, W[i]);
+        a = b + size;
+        for (unsigned i = 0; i < size; i++)
+            one_butterfly_descending(b++, a++, W[i]);
+    }
+    
     
     #define BUTTERFLY_CHUNK(X) void butterfly_chunk_##X(Num *A, Num *B, int swapper) \
     { \
@@ -255,7 +283,56 @@ template <class Num, class Arith> class FFTT
             one_butterfly_without_twiddle(A + k, A + k + 1);
     }
 
+    static void fft_level_0_and_1(Num *A, Num *twiddle_buf, unsigned n)
+    {
+        Num twiddle = twiddle_buf[3];
+        for (unsigned k = 0; k < n; k += 4)
+        {
+            Num s1 = Arith::add(A[k], A[k+1]);
+            Num d1 = Arith::sub(A[k], A[k+1]);
+            Num s2 = Arith::add(A[k+2], A[k+3]);
+            Num d2 = Arith::mul(twiddle, Arith::sub(A[k+2], A[k+3]));
+            A[k] = Arith::add(s1, s2);
+            A[k + 1] = Arith::add(d1, d2);
+            A[k + 2] = Arith::sub(s1, s2);
+            A[k + 3] = Arith::sub(d1, d2);
+        }
+    }
 
+    static void fft_levels_0_to_2(Num *A, Num *twiddle_buf, unsigned n)
+    {
+        Num tw0 = twiddle_buf[3];
+        Num tw1 = twiddle_buf[5];
+        Num tw2 = twiddle_buf[7];
+        for (unsigned k = 0; k < n; k += 8)
+        {
+            Num s1 = Arith::add(A[k], A[k+1]);
+            Num d1 = Arith::sub(A[k], A[k+1]);
+            Num s2 = Arith::add(A[k+2], A[k+3]);
+            Num d2 = Arith::mul(tw0, Arith::sub(A[k+2], A[k+3]));
+            Num T10 = Arith::add(s1, s2);
+            Num T11 = Arith::add(d1, d2);
+            Num T12 = Arith::sub(s1, s2);
+            Num T13 = Arith::sub(d1, d2);
+            Num s3 = Arith::add(A[k+4], A[k+5]);
+            Num d3 = Arith::sub(A[k+4], A[k+5]);
+            Num s4 = Arith::add(A[k+6], A[k+7]);
+            Num d4 = Arith::mul(tw0, Arith::sub(A[k+6], A[k+7]));
+            Num T20 = Arith::add(s3, s4);
+            Num T21 = Arith::mul(tw1, Arith::add(d3, d4));
+            Num T22 = Arith::mul(tw0, Arith::sub(s3, s4));
+            Num T23 = Arith::mul(tw2, Arith::sub(d3, d4));
+            A[k]     = Arith::add(T10, T20);
+            A[k + 1] = Arith::add(T11, T21);
+            A[k + 2] = Arith::add(T12, T22);
+            A[k + 3] = Arith::add(T13, T23);
+            A[k + 4] = Arith::sub(T10, T20);
+            A[k + 5] = Arith::sub(T11, T21);
+            A[k + 6] = Arith::sub(T12, T22);
+            A[k + 7] = Arith::sub(T13, T23);
+        }
+    }
+    
     void fft_small(Num *A, Num *omegas, unsigned n, int level)
     {
         Num w = Arith::unity();
@@ -285,8 +362,45 @@ template <class Num, class Arith> class FFTT
             }            
         }
     }
-    
 
+
+    void fft_medium_double(Num *A, Num *twiddle_buf, unsigned n, int level)
+    {
+        unsigned m = 1U << level, twice_m = m << 1, quad_m = m << 2;
+        Num *tf = twiddle_buf + m;
+        Num *tf_big = twiddle_buf + twice_m;
+        
+        if (bit_reverse_first)
+        {
+            for (unsigned k = 0; k < n; k += quad_m)
+                butterfly_ascending_double(A + k, tf, tf_big, m);
+        }
+        else
+        {
+            for (unsigned k = 0; k < n; k += quad_m)
+                butterfly_descending_double(A + k, tf, tf_big, m);
+        }
+    }
+
+    
+    void fft_recursive_ascending(Num *A, Num *twiddle_buf, unsigned boundary, unsigned n)
+    {
+        if (n == boundary) return;
+        unsigned half = n >> 1;
+        fft_recursive_ascending(A, twiddle_buf, boundary, half);
+        fft_recursive_ascending(A + half, twiddle_buf, boundary, half);
+        butterfly_ascending(A, A + half, twiddle_buf + half, half);
+    }
+
+    void fft_block_ascending(Num *A, Num *twiddle_buf, unsigned n, int min_level, int level_cap)
+    {
+        unsigned boundary = 1U << min_level;
+        unsigned butterfly_size = 1U << level_cap;
+        for (unsigned i = 0; i < n; i += butterfly_size)
+            fft_recursive_ascending(A + i, twiddle_buf, boundary, butterfly_size);
+    }
+
+    
     void fft_medium(Num *A, Num *twiddle_buf, unsigned n, int level)
     {
         unsigned m = 1U << level, twice_m = m << 1;
@@ -406,11 +520,22 @@ template <class Num, class Arith> class FFTT
             return;
         }
         
+        if (log_n == 0)
+            return;
+        else if (log_n == 1)
+        {
+            one_butterfly_without_twiddle(A, A + 1);
+            return;
+        }
+        
+        assert(log_chunk_size >= 2);
+
+        fft_level_0_and_1(A, twiddle_buf, n);
         int level_cap = log_n > log_chunk_size ? log_chunk_size : log_n;
         
-        for (int level = 0; level < level_cap; level++)
-            fft_not_big(A, omegas, twiddle_buf, n, level);
-        
+        for (int level = 2; level < level_cap; level++)
+            fft_medium(A, twiddle_buf, n, level);
+         
         if (log_n > log_chunk_size)
         {
             swap_chunks(A, n);
@@ -440,7 +565,9 @@ template <class Num, class Arith> class FFTT
         }
         
         for (int level = level_cap; level; level--)
+        {
             fft_not_big(A, omegas, twiddle_buf, n, level - 1);
+        }
     }
 
 

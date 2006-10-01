@@ -56,12 +56,16 @@ struct ModPrimeArith
     {
         uint32_t s = a + b;
         return (s >= P  ?  s - P  :  s);
+        //int32_t s = a + b - P;
+        //return s + (P & (s >> 31)); 
     }
 
     static inline uint32_t sub(uint32_t a, uint32_t b)
     {
-        uint32_t d = P + a - b;
-        return (d >= P  ?  d - P  :  d);
+        int32_t d = a - b;
+        return d + ((d >> 31) & P);
+        //uint32_t d = P + a - b;
+        //return (d >= P  ?  d - P  :  d);
     } 
 
     /* Montgomery reduction.
@@ -89,6 +93,8 @@ struct ModPrimeArith
         // So we can put it this way: (t * P - x0) / 2^{31}, where `/' has no remainder.
         uint32_t u = ((uint64_t) t * P) >> FFT_P_PLUS;
         
+        /*int32_t d = x1 - u;
+        return d + (P & (d >> 31));*/
         if (x1 >= u)
             return x1 - u;
         else
@@ -129,7 +135,7 @@ struct ModPrimeArith
 
 //FFTT<uint32_t, ModPrimeArith> fft_mod_prime(2, 14);
 FFTT<uint32_t, ModPrimeArith> fft_mod_prime_good(1, 14);
-FFTT<uint32_t, ModPrimeArith> fft_mod_prime_bad(1, 1);
+FFTT<uint32_t, ModPrimeArith> fft_mod_prime_bad(1, 3);
 
 #ifdef TEST
 
@@ -154,5 +160,22 @@ int main()
     fft_mod_prime_bad.test_fft_eq_fft_simple();
     fft_mod_prime_good.test_fft_eq_fft_simple();
 }
+
+#endif
+
+#ifdef PRIME_BENCH
+
+#define LOG_N 20
+uint32_t buf[1 << LOG_N];
+int main()
+{
+    int i;
+    for (i = 0; i < (1 << LOG_N); i++)
+        buf[i] = rand() % ModPrimeArith::P;
+    for (i = 0; i < 10; i++)
+        fft_mod_prime_good.fft(buf, buf, LOG_N);
+    return 0;
+}
+
 
 #endif
