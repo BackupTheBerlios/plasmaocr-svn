@@ -83,7 +83,7 @@ static void load_pbm_raster(FILE *f, unsigned char **pixels, int w, int h)
     unsigned char *row = MALLOC(unsigned char, n);
     for (i = 0; i < h; i++)
     {
-        if (fread(row, 1, n, f) != n)
+        if (fread(row, 1, n, f) != (unsigned) n)
         {
             fprintf(stderr, "problem in PBM file raster\n");
             exit(1);
@@ -94,7 +94,7 @@ static void load_pbm_raster(FILE *f, unsigned char **pixels, int w, int h)
 }
 
 
-int load_pnm(FILE *f, unsigned char ***pixels, int *width, int *height)
+int load_pnm_from_FILE(FILE *f, unsigned char ***pixels, int *width, int *height)
 {
     int maxval;
     char type;
@@ -156,4 +156,22 @@ int load_pnm(FILE *f, unsigned char ***pixels, int *width, int *height)
             assert(0);
             return 0;
     }
+}
+
+
+int load_pnm(const char *path, unsigned char ***pixels, int *w, int *h)
+{
+    FILE *f = fopen(path, "rb");
+    int result;
+    if (!f)
+    {
+        perror(path);
+        exit(1);
+    }
+
+    result = load_pnm_from_FILE(f, pixels, w, h);
+
+    fclose(f);
+
+    return result;
 }

@@ -29,6 +29,7 @@
  */
 
 
+#include "common.h"
 #include "shiftcut.h"
 #include <assert.h>
 #include <stdio.h>
@@ -40,7 +41,7 @@ typedef unsigned char byte;
 static int sum_column_gray(byte **pixels, int x, int y1, int y2)
 {
     int sum = 0, y;
-    for (y = y1; y <= y2; y++) sum += 255 - pixels[y][x]; // XXX
+    for (y = y1; y <= y2; y++) sum += 255 - pixels[y][x]; /* XXX */
     return sum;
 }
 
@@ -49,7 +50,7 @@ static int sum_row_gray(byte *row, int x1, int x2)
 {
     int sum = 0, x, n = x2 - x1;
     byte *p = row + x1;
-    for (x = 0; x <= n; x++) sum += 255 - p[x]; // XXX
+    for (x = 0; x <= n; x++) sum += 255 - p[x]; /* XXX */
     return sum;
 }
 
@@ -85,7 +86,7 @@ static void make_hcut(int a, int l, int w, int h,
     int cut = 0; /* how many rows are in the top part */
     int up_weight = 0;
 
-    if (k > sizeof(Fingerprint)) return;
+    if (k > (int) sizeof(Fingerprint)) return;
 
     if (a)
     {
@@ -129,7 +130,7 @@ static void make_vcut(int a, int l, int w, int h,
     int cut = 0;          /* how many columns are in the left part */
     int left_weight = 0;
 
-    if (k > sizeof(Fingerprint)) return;
+    if (k > (int) sizeof(Fingerprint)) return;
 
     if (a)
     {
@@ -197,7 +198,7 @@ long fingerprint_distance_squared(Fingerprint f1, Fingerprint f2)
     int i;
     long s = 0;
 
-    for (i = 0; i < sizeof(Fingerprint); i++)
+    for (i = 0; i < (int) sizeof(Fingerprint); i++)
     {
         long difference = f1[i] - f2[i];
         s += difference * difference;

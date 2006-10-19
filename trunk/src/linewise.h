@@ -1,6 +1,6 @@
 /* Plasma OCR - an OCR engine
  *
- * pnm.h - loading PNM files
+ * linewise.h - reading text files line by line
  *
  * Copyright (C) 2006  Ilya Mezhirov
  *
@@ -20,17 +20,29 @@
  */
 
 
-#ifndef PLASMA_OCR_PNM_H
-#define PLASMA_OCR_PNM_H
 
+#ifndef PLASMA_OCR_LINEWISE_H
+#define PLASMA_OCR_LINEWISE_H
 
-#define PBM 4
-#define PGM 5
-#define PPM 6
 
 #include <stdio.h>
 
-int load_pnm(const char *path, unsigned char ***pixels, int *w, int *h);
-int load_pnm_from_FILE(FILE *f, unsigned char ***pixels, int *w, int *h);
 
-#endif
+typedef struct LinewiseReaderStruct *LinewiseReader;
+
+LinewiseReader linewise_reader_create(FILE *input);
+
+/* Destroy the LinewiseReader. FILE IS NOT CLOSED. */
+void linewise_reader_destroy(LinewiseReader);
+
+/* Read a line (including newline character), allocating memory as necessary.
+ * Returns NULL and closes the file in case of EOF.
+ * Important: with each call, previously allocated lines are erased.
+ */
+const char *linewise_read(LinewiseReader);
+
+/* Same as linewise_read, but strips newline character. */
+const char *linewise_read_and_chomp(LinewiseReader r);
+
+
+#endif /* LINEWISE_H */

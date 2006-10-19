@@ -1,243 +1,317 @@
 #if 0
-    gcc -o coldplasma -g -I../my/minidjvu-0.5 -I../core -Wall ../core/bitmaps.c ../core/linewise.c pnm.c shiftcut.c main.c layout.c code2tex.c -Wl,--rpath -Wl,/usr/local/lib -lminidjvu
-    exit    
+gcc -DNTESTING -Wall -g -I../core main.c -o coldplasma ../core/?*.c
+exit
 #endif
 
 
-#include "code2tex.h"
-#include "layout.h"
-#include "pnm.h"
-#include "shiftcut.h"
-#include "memory.h"
+#include "common.h"
+#include "core.h"
 #include "bitmaps.h"
-#include <assert.h>
+#include "pnm.h"
+#include <unistd.h>
+#include <string.h>
 
 
-#define SIZE_COEF 1.3
+#define TAG_BEGIN  '$'
+#define TAG_CANCEL '$'
+#define TAG_END    '$'
 
-    
+
+
+static void usage(void)
+{
+    /* XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX */
+    fprintf(stderr, "invalid usage\n");
+    exit(1);
+}
+
+
 typedef struct
 {
-    int code;
-    int width;
-    int height;
-    Fingerprint fingerprint;
-} Sample;
-    
-
-typedef struct
-{
-    unsigned char **pixels; // the whole page
-    int width;
-    int height;
-    int is_gray;  // otherwise black and white
-    Sample *samples;
-    int sample_count;
-    TransitionTable table;
+    char *input_path;
+    char *job_file_path;
+    char *out_library_path;
+    int colored_output;
+    int just_one_letter;
+    int just_one_word;
+    int append;
+    Core core;
+    unsigned char **pixels;
+    int width, height;
+    char *ground_truth;
 } Job;
 
-
-static int read_uint16(FILE *f)
+static void init_job(Job *job)
 {
-    int i = fgetc(f) << 8;
-    return i | fgetc(f);
+    job->input_path = NULL;
+    job->job_file_path = NULL;
+    job->out_library_path = NULL;
+    job->colored_output = isatty(1);
+    job->pixels = NULL;
+    job->just_one_word = job->just_one_letter = 0;
+    job->ground_truth = NULL;
+    job->append = 0;
 }
 
-
-static int read_int32(FILE *f)
+static void load_image(Job *job)
 {
-    int i = read_uint16(f) << 16;
-    return i | read_uint16(f);
-}
-
-
-static void read_sample(FILE *f, Sample *s)
-{
-    s->code   = read_uint16(f);
-    s->width  = read_uint16(f);
-    s->height = read_uint16(f);
-    fread(s->fingerprint, 1, sizeof(s->fingerprint), f);
-}
-
-
-static void read_library(const char *path, Job *job)
-{
-    int i;
-    FILE *f = fopen(path, "rb");
-    
-    if (!f)
+    int pnm_type;
+    if (!job->input_path)
     {
-        perror(path);
+        fprintf(stderr, "You must specify a path to input image\n");
+        usage();
+    }
+    pnm_type = load_pnm(job->input_path, &job->pixels, &job->width, &job->height);
+    if (pnm_type != PBM)
+    {
+        fprintf(stderr, "The image is not a PBM file\n");
+        exit(1);
+    }
+    
+}
+
+static void color_print_recognized_letter(RecognizedLetter *l)
+{
+    switch(l->color)
+    {
+        case CC_RED:
+            printf("\x1B[31m_\x1B[30m");
+            break;
+        case CC_YELLOW:
+            printf("\x1B[31m%s\x1B[30m", l->text);
+            break;
+        case CC_GREEN: case CC_BLUE:
+            printf("%s", l->text);
+            break;
+    }
+}
+
+static void process_word(Job *job, int x, int y, int w, int h)
+{
+    unsigned char **window;
+    RecognizedWord *rw;
+
+    if (x < 0 || x + w > job->width || y < 0 || y + h > job->height)
+    {
+        fprintf(stderr, "invalid rectangle coordinates\n");
+        exit(1);
+    }
+    
+    window = subbitmap(job->pixels, x, y, h);
+    rw = recognize_word(job->core, window, w, h, 0);
+    if (job->colored_output)
+    {
+        int i;
+        for (i = 0; i < rw->count; i++)
+            color_print_recognized_letter(rw->letters[i]);
+    }
+    else
+        fputs(rw->text, stdout);
+    
+    free_recognized_word(rw);
+    FREE(window);
+}
+
+static void process_letter(Job *job, int x, int y, int w, int h)
+{
+    unsigned char **window;
+    RecognizedLetter *rl;
+    if (x < 0 || x + w > job->width || y < 0 || y + h > job->height)
+    {
+        fprintf(stderr, "invalid rectangle coordinates\n");
         exit(1);
     }
 
-    job->sample_count = read_int32(f);
-    job->samples = MALLOC(Sample, job->sample_count);
-    for (i = 0; i < job->sample_count; i++)
-        read_sample(f, &job->samples[i]);
-    
-    fclose(f);
+    window = subbitmap(job->pixels, x, y, h);
+    rl = recognize_letter(job->core, window, w, h, 0);
+    if (job->colored_output)
+        color_print_recognized_letter(rl);
+    else if (rl->text)
+        fputs(rl->text, stdout);
+    else
+        putchar('_');
+
+    free_recognized_letter(rl);
+    FREE(window);
 }
 
-
-static void destroy_job(Job *job)
+static void skip_to_end_of_tag(FILE *pjf)
 {
-    free_bitmap(job->pixels);
-    transition_table_destroy(job->table);
-    FREE(job->samples);
-}
-
-
-static Sample *find_nearest_sample(Sample *samples, int nsamples, int w, int h, Fingerprint f)
-{
-    Sample *best = NULL;
-    long best_dist = 0x7FFFFFFFL;
-    int i;
-
-    for (i = 0; i < nsamples; i++)
+    int c;
+    while ((c = fgetc(pjf)) != TAG_END)
     {
-        int a = samples[i].width  * h;
-        int b = samples[i].height * w;
-        if (a > SIZE_COEF * b || b > SIZE_COEF * a)
-            continue;
-
-        long dist = fingerprint_distance_squared(samples[i].fingerprint, f);
-        if (dist < best_dist)
+        if (c == EOF)
         {
-            best_dist = dist;
-            best = &samples[i];
+            fprintf(stderr, "unclosed tag in the job file\n");
+            exit(1);
         }
     }
- 
-    return best;
 }
 
-
-static Sample *find_best_match(Job *job, Box *box)
+static void process_tag(Job *job, FILE *pjf)
 {
-    unsigned char **pointers = MALLOC(unsigned char *, box->h);
-    int i;
-    Sample *result;
-    Fingerprint f;
-
-    for (i = 0; i < box->h; i++)
-        pointers[i] = job->pixels[i + box->y] + box->x;
-
-    if (job->is_gray)
-        get_fingerprint_gray (pointers, box->w, box->h, &f);
-    else
-        get_fingerprint_bw   (pointers, box->w, box->h, &f);
- 
-    result = find_nearest_sample(job->samples, job->sample_count, box->w, box->h, f);
-
-    FREE(pointers);
-    return result;
-}
-
-
-static void dump_char(Job *job, List *l)
-{
-    Box *box;
-    assert(l->type == LIST_LEAF);
-    box = l->box;
-    if (box->is_space)
-        putchar(' ');
+    int x, y, w, h;
+    char tag[11];
+    fscanf(pjf, "%10s", tag);
+    if (!strcmp(tag, "word"))
+    {
+        fscanf(pjf, "%d %d %d %d", &x, &y, &w, &h);
+        process_word(job, x, y, w, h);
+        skip_to_end_of_tag(pjf);
+    }
+    else if (!strcmp(tag, "letter"))
+    {
+        fscanf(pjf, "%d %d %d %d", &x, &y, &w, &h);
+        process_letter(job, x, y, w, h);
+        skip_to_end_of_tag(pjf);
+    }
     else
     {
-        printf("%s", transition_table_lookup(job->table,
-                        find_best_match(job, box)->code));
+        fprintf(stderr, "unknown PJF tag: %s\n", tag);
     }
 }
 
-static void dump_line(Job *job, List *l)
+static void go(Job *job, FILE *pjf)
 {
-    int i;
-    assert(l->type == LIST_LINE);
-    for (i = 0; i < l->count; i++)
-        dump_char(job, &l->items[i]);
-    putchar('\n');
+    int c;
+    while ((c = fgetc(pjf)) != EOF)
+    {
+        if (c != TAG_BEGIN)
+            putchar(c);
+        else
+        {
+            c = fgetc(pjf);
+            if (c == TAG_CANCEL)
+                putchar(c);
+            else
+            {
+                ungetc(c, pjf);
+                process_tag(job, pjf);
+            }
+        }
+    }
 }
 
-
-static void dump_block(Job *job, List *l)
-{
-    int i;
-    assert(l->type == LIST_BLOCK);
-    for (i = 0; i < l->count; i++)
-        dump_line(job, &l->items[i]);
-}
-
-
-static void dump_page(Job *job, List *l)
-{
-    int i;
-    /*print_bitmap(job->pixels, job->width, job->height);
-    exit(1);*/
-    assert(l->type == LIST_PAGE);
-    for (i = 0; i < l->count; i++)
-        dump_block(job, &l->items[i]);
-}
-
+#ifndef TESTING
 
 int main(int argc, char **argv)
 {
-    char *input_path, *charlib_path, *codetable_path, *ocrad_result_path;
     Job job;
-    List list;
-    BoxList *boxlist;
-    int pnm_type;
+    int i;
+    FILE *pjf;
+
+    init_job(&job);
+    job.core = create_core();
     
-    if (argc != 5)
+    for (i = 1; i < argc; i++)
     {
-        fprintf(stderr, "4 arguments required: input, charlib, codetable and Ocrad -x.\n");
-        fprintf(stderr, "Or use (or try to fix) the `plasma' shell script.\n");
-        exit(2);
+        char *opt = argv[i];
+        char *arg = argv[i + 1];
+        if (opt[0] == '-' && strcmp(opt, "-"))
+        {
+            if (!strcmp(opt, "-L") || !strcmp(opt, "--letter"))
+            {
+                job.just_one_letter = 1;
+                job.just_one_word = 0;
+            }
+            if (!strcmp(opt, "-t") || !strcmp(opt, "--truth"))
+            {
+                i++; if (!arg) usage();
+                job.just_one_letter = 1;
+                job.just_one_word = 0;
+                job.ground_truth = arg;
+            }
+            if (!strcmp(opt, "-a") || !strcmp(opt, "--append"))
+            {
+                job.append = 1;
+            }
+            else if (!strcmp(opt, "-W") || !strcmp(opt, "--word"))
+            {
+                job.just_one_letter = 0;
+                job.just_one_word = 1;
+            }
+            else if (!strcmp(opt, "-l") || !strcmp(opt, "--lib"))
+            {
+                Library l;
+                i++; if (!arg) usage();
+                l = library_open(arg);
+                library_discard_prototypes(l);
+                add_to_core(job.core, l);
+            }
+            else if (!strcmp(opt, "-p") || !strcmp(opt, "-j") || !strcmp(opt, "--pjf"))
+            {
+                i++; if (!arg) usage();
+                job.job_file_path = arg;
+            }
+            else if (!strcmp(opt, "-i") || !strcmp(opt, "--in"))
+            {
+                i++; if (!arg) usage();
+                job.input_path = arg;                
+            }
+            else if (!strcmp(opt, "-o") || !strcmp(opt, "--out"))
+            {
+                i++; if (!arg) usage();
+                set_core_orange_policy(job.core, 1);
+                job.out_library_path = arg;
+            }
+            else if (!strcmp(opt, "-c") || !strcmp(opt, "--color"))
+            {
+                job.colored_output = 1;
+            }
+            else if (!strcmp(opt, "-n") || !strcmp(opt, "--nocolor"))
+            {
+                job.colored_output = 0;
+            }
+        }
     }
 
-    input_path = argv[1];
-    charlib_path = argv[2];
-    codetable_path = argv[3];
-    ocrad_result_path= argv[4];
-    
-    read_library(charlib_path, &job);
-    job.table = transition_table_load(codetable_path);
 
-    FILE *input = fopen(input_path, "r");
-    if (!input)
+    load_image(&job);
+
+    if (job.just_one_letter)
     {
-        perror(input_path);
-        exit(1);
+        process_letter(&job, 0, 0, job.width, job.height);
+        putchar('\n');
+        if (job.ground_truth && job.out_library_path)
+        {
+            Library l = get_core_orange_library(job.core);
+            if (library_shelves_count(l))
+            {
+                Shelf *s = library_get_shelf(l, 0);
+                if (s->count)
+                {
+                    strncpy(s->records[0].text, job.ground_truth, MAX_TEXT_SIZE);
+                }
+            }
+        }
     }
-    pnm_type = load_pnm(input, &job.pixels, &job.width, &job.height);
-    fclose(input);
-    
-    switch(pnm_type)
+    else if (job.just_one_word)
     {
-        case PBM:
-            job.is_gray = 0;
-        break;
-        case PGM:
-            job.is_gray = 1;
-        break;
-        default:
-            fprintf(stderr, "PPM not supported, use ppmtopgm on it\n");
+        process_word(&job, 0, 0, job.width, job.height);
+        putchar('\n');
+    }
+    else 
+    {
+        if (!job.job_file_path)
+        {
+            fprintf(stderr, "You must specify a pjf file (or either -L or -W).\n");
+            usage();
+        }
+        pjf = fopen(job.job_file_path, "r");
+        if (!pjf)
+        {
+            perror(job.job_file_path);
             exit(1);
+        }
+        go(&job, pjf);
     }
 
-    FILE *ocrad = fopen(ocrad_result_path, "r");
-    if (!ocrad)
-    {
-        perror(ocrad_result_path);
-        exit(1);
-    }
-    boxlist = parse_ocrad(&list, ocrad);
-    fclose(ocrad);
-    
-    dump_page(&job, &list);
-    
-    list_destroy_children(&list);
-    box_list_destroy(boxlist);
-    destroy_job(&job);
-    
+    if (job.out_library_path)
+        library_save(get_core_orange_library(job.core), job.out_library_path, job.append);
+
+    free_bitmap(job.pixels);
+    free_core(job.core);
     return 0;
 }
+
+#endif
