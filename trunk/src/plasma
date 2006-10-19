@@ -1,46 +1,18 @@
 #! /bin/sh
 
+PLASMA_HOME=`echo $0 | sed -e "s/\/[^\/]*$//"`
+PLASMA_BIN=$PLASMA_HOME
 
-# Find the `coldplasma' executable
+PBM=`mktemp`
+PJF=`mktemp`
 
-if [ "$PLASMA" == "" ] ; then
-    PLASMA=`which coldplasma`
-    if [ "$PLASMA" == "" ] ; then
-        echo "Cannot find the \`coldplasma' executable. Check that it's installed." >&2
-        exit 1
-    fi
-fi
+anytopnm $1 | ppmtopgm | pgmtopbm -threshold >$PBM
 
+ocrad -x - $PBM | $PLASMA_BIN/orf2pjf >$PJF
 
-# Find GNU Ocrad
+$PLASMA_BIN/coldplasma --in $PBM \
+    --lib $PLASMA_HOME/charlibs/cyr1.lib \
+    --pjf $PJF \
+    | iconv -f utf8 | sed -f $PLASMA_HOME/charlibs/cyr.sed
 
-if [ "$OCRAD" == "" ] ; then
-    OCRAD=`which ocrad`
-    if [ "$OCRAD" == "" ] ; then
-        echo "Cannot find GNU Ocrad (it's needed to analyze layout). Install it, please." >&2
-        exit 1
-    fi
-fi
-
-
-# Find the directory with character database
-
-if [ "$PLASMA_HOME" == "" ] ; then
-    if [ -d /usr/share/plasma ] ; then
-        PLASMA_HOME=/usr/share/plasma
-    elif [ -d /usr/local/share/plasma ] ; then
-        PLASMA_HOME=/usr/local/share/plasma
-    else
-        echo "Cannot find the character library." >&2
-    fi
-fi
-
-
-if [ "$1" == "" ] ; then
-    echo "Usage: plasma <PGM or PBM file>" >&2
-    exit 2
-fi
-
-TMPFILE=`mktemp` || { echo Could not create temp file >&2 && exit 1; }
-ocrad "$1" -x "$TMPFILE" >/dev/null && coldplasma "$1" "$PLASMA_HOME/charlib-0.1" "$PLASMA_HOME/code2tex-0.1" "$TMPFILE"
-rm -f "$TMPFILE"
+rm -f $PJF $PBM
